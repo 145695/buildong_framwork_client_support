@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layer 3 TTS Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        select, button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .audio-player {
+            margin: 10px 0;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Layer 3 TTS Test - Web Interface</h1>
+        
+        <div class="test-section">
+            <h3>Test Text-to-Speech</h3>
+            <textarea id="testText" placeholder="Enter text to convert to speech...">Hello, this is a test of the text-to-speech system.</textarea>
+            
+            <label for="language">Language:</label>
+            <select id="language">
+                <option value="en">English</option>
+                <option value="fr">French</option>
+                <option value="ar">Arabic</option>
+            </select>
+            
+            <button onclick="testTTS()">🗣️ Generate Speech</button>
+            <button onclick="testBankingResponse()">🏦 Test Banking Response</button>
+        </div>
+        
+        <div class="result" id="result" style="display: none;">
+            <h4>Result:</h4>
+            <div id="resultContent"></div>
+        </div>
+    </div>
+
+    <script>
+        async function testTTS() {
+            const text = document.getElementById('testText').value;
+            const language = document.getElementById('language').value;
+            const resultDiv = document.getElementById('result');
+            const resultContent = document.getElementById('resultContent');
+            
+            if (!text.trim()) {
+                alert('Please enter some text to convert');
+                return;
+            }
+            
+            resultDiv.style.display = 'block';
+            resultContent.innerHTML = '<div class="loading">🔄 Generating speech...</div>';
+            
+            try {
+                const response = await fetch('/test/tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        language: language
+                    })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const audioUrl = URL.createObjectURL(blob);
+                    
+                    resultContent.innerHTML = `
+                        <div class="audio-player">
+                            <audio controls autoplay>
+                                <source src="${audioUrl}" type="audio/wav">
+                                Your browser does not support the audio element.
+                            </audio>
+                        </div>
+                        <p><strong>✅ Speech generated successfully!</strong></p>
+                        <p><em>Text:</em> "${text}"</p>
+                        <p><em>Language:</em> ${language}</p>
+                        <a href="${audioUrl}" download="tts_${language}_${Date.now()}.wav">
+                            <button>💾 Download Audio</button>
+                        </a>
+                    `;
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } catch (error) {
+                resultContent.innerHTML = `
+                    <p><strong>❌ Error:</strong> ${error.message}</p>
+                    <p>Make sure the server is running and TTS models are loaded.</p>
+                `;
+            }
+        }
+        
+        async function testBankingResponse() {
+            const bankingText = `Thank you for your inquiry about our personal loan services. 
+            Our current interest rates start at 4.5% APR for qualified applicants. 
+            Please visit our website or contact your local branch for more information.`;
+            
+            document.getElementById('testText').value = bankingText;
+            document.getElementById('language').value = 'en';
+            
+            await testTTS();
+        }
+        
+        // Test with sample texts
+        function loadSampleText(type) {
+            const samples = {
+                english: "Hello, this is a test of the text-to-speech system.",
+                french: "Bonjour, ceci est un test du système de synthèse vocale.",
+                arabic: "مرحباً، هذا اختبار لنظام تحويل النص إلى كلام."
+            };
+            
+            document.getElementById('testText').value = samples[type];
+            document.getElementById('language').value = type === 'arabic' ? 'ar' : type === 'french' ? 'fr' : 'en';
+        }
+    </script>
+</body>
+</html>

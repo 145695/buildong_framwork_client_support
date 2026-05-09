@@ -1,0 +1,52 @@
+# Core Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-dotenv>=1.0.0
+streamlit>=1.28.0
+
+# NVIDIA AI
+nvidia-riva-client>=1.0.0
+
+# Machine Learning & AI
+torch>=2.0.0
+transformers>=4.35.0
+kokoro>=0.1.0
+gradio_client>=0.10.0
+
+# Audio Processing
+numpy>=1.24.0
+soundfile>=0.12.1
+python-multipart>=0.0.6
+
+# Text-to-Speech (TTS)
+gTTS>=2.3.0
+pydub>=0.25.0
+
+# Speech-to-Text (STT) - Fallback
+speechrecognition>=3.10.0
+
+# Language Processing
+langgraph>=0.0.20
+langchain-openai>=0.0.5
+langchain-core>=0.1.0
+
+# Optional: FFmpeg bindings (for Whisper STT)
+# Note: Requires system FFmpeg installation for full functionality
+ffmpeg-python>=0.2.0
+
+# Optional: Habibi-TTS (Arabic TTS)
+# Note: May require additional setup for FFmpeg compatibility
+# f5-tts>=0.1.0  # Uncomment if using Habibi-TTS
+
+# Knowledge Base RAG System
+pdfplumber>=0.10.0
+chromadb>=0.5.3
+langchain>=0.1.0
+langchain-groq>=0.1.0
+langchain-community>=0.0.20
+requests>=2.31.0
+sentence-transformers>=3.0.1
+
+# Observability
+langsmith>=0.1.0
+

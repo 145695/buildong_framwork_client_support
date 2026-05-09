@@ -1,0 +1,25 @@
+﻿.venv/
+__pycache__/
+
+# Environment variables with API keys
+.env
+
+# Knowledge base vector cache
+knowledgebase/vector_cache/
+
+# Generated audio files
+outputs/
+
+# Binary database files
+chroma_db/
+
+# Large policy PDF files
+policies/
+policies_text/
+
+# Large model files
+**/model.safetensors
+*.safetensors
+
+# Embedded git repository
+python-clients/
