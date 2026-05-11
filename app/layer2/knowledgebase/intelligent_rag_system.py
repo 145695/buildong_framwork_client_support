@@ -134,6 +134,7 @@ class IntelligentRAGSystem:
                 self.document_profiles = data["profiles"]
                 self.indexed_chunks = self.document_chunks
                 self.faiss_index = faiss.read_index(str(index_path))
+                self.indexed_chunks = self.document_chunks
                 print(f"✅ Index loaded from cache ({len(self.document_chunks)} chunks) - startup instant")
                 return True
         except Exception as e:
@@ -148,7 +149,7 @@ class IntelligentRAGSystem:
             return
         
         # Try to load from cache first
-        cache_dir = Path(__file__).parent / "vector_cache"
+        cache_dir = Path(__file__).resolve().parent / "vector_cache"
         if self._load_index(cache_dir):
             return  # loaded from cache, skip everything else
         
@@ -498,7 +499,8 @@ Réponse:"""
                 "sources": sources,
                 "confidence": float(scores[0][0]),
                 "documents_found": len(sources),
-                "needs_clarification": False
+                "needs_clarification": False,
+                "retrieved_chunks": top_chunks  # Add retrieved chunks for evaluation
             }
         
         except Exception as e:

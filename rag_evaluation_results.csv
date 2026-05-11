@@ -1,0 +1,30 @@
+question_id,question,answer,sources,confidence,documents_found,latency_seconds,retrieval_precision_at_5,answer_relevance_score,faithfulness_score,retrieved_chunks_count
+1,What are the fees for opening a checking account for individuals?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,1.1292262077331543,0.0,0.25,True,0
+2,How much does it cost annually to maintain a savings account?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.617624044418335,0.0,0.25,True,0
+3,What are the fees for account management for junior savings accounts?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6510553359985352,0.0,0.5,True,0
+4,What are the charges for dormant accounts without transactions?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6434423923492432,0.0,0.5,True,0
+5,How much does it cost to request an account history statement?,"**Réponse :**
+Le coût pour demander un historique de compte est de **150 DA**, que ce soit pour un particulier ou un professionnel.",notice-information-opv-n2024-01_fr.pdf; CGB-web-professionnels.pdf; CGB-web-particulier.pdf; LD-02-2025-FR.pdf; REG-N°25-10-FR.pdf; REG-N°25-07-FR.pdf; reglement202001.pdf,0.5760358572006226,7,0.9010970592498779,0.4,1.0,True,8
+6,What are the fees for closing an account?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.7344133853912354,0.0,0.5,True,0
+7,How much do bank transfers cost between agencies?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.7963643074035645,0.0,0.5,True,0
+8,What are the fees for cash withdrawals at other branches?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.9345061779022217,0.0,0.5,True,0
+9,How much do cash deposits to savings accounts cost?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6594135761260986,0.0,0.5,True,0
+10,What are the fees for check opposition and cash book stops?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6495099067687988,0.0,0.25,True,0
+11,How much does it cost to process succession documents?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6506893634796143,0.0,0.25,True,0
+12,What are the charges for document photocopying at the bank?,"**Frais de photocopie à la BNA : 50 DA par photocopie.**
+
+Cette tarification s'applique aux particuliers, professionnels et entreprises, selon les documents consultés.",CGB-web-professionnels.pdf; CGB-web-entreprise.pdf; REG-N°25-07-FR.pdf; REG-N°25-10-FR.pdf; CGB-web-particulier.pdf; F2023043_montaire_et_bancaite_FR_1.pdf,0.5976951122283936,6,0.8622851371765137,0.6,1.0,True,8
+13,How much do account research fees cost per document?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6016473770141602,0.0,0.25,True,0
+14,What is the maximum financing percentage for real estate loans?,Financement possible à 100% (maximum 20 millions DA) pour les crédits immobiliers.,F2025088.pdf; CGB-web-particulier.pdf; Loi_de_finance_2025_FR.pdf; notice-information-opv-n2024-01_fr.pdf; NOTE-TEG-02-2025-WEB.pdf; Fiche_Credit_Immobilier.pdf,0.7096325159072876,6,0.7512967586517334,0.0,0.5,False,7
+15,What are the interest rates for real estate loans without bonuses?,Une erreur technique est survenue.,,0.0,0,0.39435696601867676,0.0,0.5,False,0
+16,What interest rates apply to saving customers for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.3913383483886719,0.0,0.5,False,0
+17,What are the interest rates for borrowers under 40 years old?,Une erreur technique est survenue.,,0.0,0,0.40137481689453125,0.0,0.5,False,0
+18,What is the maximum duration for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.39601993560791016,0.0,0.5,False,0
+19,How long does it take to process a real estate loan application?,Une erreur technique est survenue.,,0.0,0,0.3958096504211426,0.0,0.5,False,0
+20,What is the maximum amount for 100% financing for young borrowers?,Une erreur technique est survenue.,,0.0,0,0.40929222106933594,0.0,0.5,False,0
+21,What are the eligibility criteria for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.44972896575927734,0.0,0.5,False,0
+22,What is the age limit for real estate loan applicants?,Une erreur technique est survenue.,,0.0,0,0.41336822509765625,0.0,0.5,False,0
+23,What income requirements exist for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.40132665634155273,0.0,0.5,False,0
+24,What repayment deferral periods are available for different loan types?,Une erreur technique est survenue.,,0.0,0,0.4209935665130615,0.0,0.5,False,0
+25,Can co-borrowers be included to increase loan capacity?,Une erreur technique est survenue.,,0.0,0,0.40435791015625,0.0,0.5,False,0
+26,What are the fees for consumer and real estate loan applications?,Une erreur technique est survenue.,,0.0,0,0.4034128189086914,0.0,0.5,False,0

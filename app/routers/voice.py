@@ -6,8 +6,11 @@ import tempfile
 import subprocess
 import sys
 import json
+import logging
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 import soundfile as sf
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -929,6 +932,46 @@ async def voice_full_pipeline(audio: UploadFile = File(...)):
             results["stages"]["orchestrator"]["final_response"] = final_state.final_response_en
             results["agent_response"] = final_state.final_response_en
             results["selected_agent"] = final_state.required_agents[0] if final_state.required_agents else "unknown"
+            
+            # Step 1: Get English response from client_support
+            english_response = final_state.final_response_en
+            
+            # Step 2: Translate back to user's original language
+            from app.layer3.translation.translator import translate_from_english
+            localized_response = translate_from_english(
+                english_response, 
+                detected_language  # "fr" or "ar" from STT stage
+            )
+            logger.debug(f"[Layer3] Localized response: {localized_response}")
+            
+            # Step 3: Convert to speech
+            from app.layer3.delivery import deliver_response
+            from app.schemas.conversation import ConversationState, SourceChannel
+            
+            # Create ConversationState for Layer 3 delivery
+            delivery_state = ConversationState(
+                conversation_id="voice-pipeline",
+                source_channel=SourceChannel.VOICE,
+                source_language=detected_language,
+                original_text="",
+                normalized_text_en=english_response,
+                final_response_en=english_response,
+                final_response_localized=localized_response
+            )
+            
+            audio_state = deliver_response(delivery_state)
+            
+            # Step 4: Add audio to pipeline response
+            if audio_state.final_response_audio:
+                # Encode binary audio data as base64 for JSON serialization
+                import base64
+                audio_base64 = base64.b64encode(audio_state.final_response_audio).decode('utf-8')
+                
+                results["final_response_audio"] = audio_base64
+                results["audio_model_used"] = audio_state.audio_model_used
+                results["audio_sample_rate"] = audio_state.audio_sample_rate
+                results["final_response_localized"] = audio_state.final_response_localized
+                logger.debug(f"[Layer3] Audio generated: {len(audio_state.final_response_audio)} bytes")
         
     except Exception as e:
         results["stages"]["orchestrator"] = {

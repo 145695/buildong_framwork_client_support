@@ -13,7 +13,7 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     state = ingest_chat_request(payload)
     
     # Security is now handled within the multi-agent core through security layers
-    state = run_multi_agent_core(state)
+    state = await run_multi_agent_core(state)
     
     if state.security_status != "blocked":
         state = deliver_response(state)

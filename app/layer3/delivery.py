@@ -1,4 +1,5 @@
 import io
+import logging
 import soundfile as sf
 from app.schemas.conversation import ConversationState, SourceChannel
 
@@ -7,6 +8,8 @@ from app.layer3.tts.habibi import text_to_speech_arabic
 from app.layer3.tts.kokoro import text_to_speech_french, text_to_speech_english
 from app.layer3.tts.gtts_fallback import text_to_speech_gtts
 from app.layer3.translation.translator import translate_from_english
+
+logger = logging.getLogger(__name__)
 
 
 def _unmask_pii(text: str, pii_map: dict[str, str]) -> str:
@@ -44,7 +47,7 @@ def _text_to_speech(text: str, language: str) -> tuple[bytes, int, str]:
 
 def deliver_response(state: ConversationState) -> ConversationState:
     text = _unmask_pii(state.final_response_en, state.pii_map)
-    text = _translate_from_english(text, state.source_language)
+    text = translate_from_english(text, state.source_language)
     text = _channel_refine(text, state.source_channel)
 
     # Generate audio if voice channel

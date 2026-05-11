@@ -4,7 +4,7 @@ Habibi-TTS Arabic Text-to-Speech Module
 
 def text_to_speech_arabic(text: str) -> tuple:
     """
-    Convert text to speech using Habibi-TTS for Arabic.
+    Convert text to speech using gTTS fallback for Arabic.
     
     Args:
         text: Text to convert to speech
@@ -12,16 +12,28 @@ def text_to_speech_arabic(text: str) -> tuple:
     Returns:
         Tuple of (audio_data, sample_rate, model_name)
     """
-    from app.main import ml_models
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Use Habibi-TTS for Arabic
-    habibi = ml_models.get("tts_habibi")
-    if habibi is None:
-        raise Exception("Habibi-TTS not loaded")
-    
-    wav, sr, _ = habibi.infer(
-        ref_file="assets/ref_arabic.wav",
-        ref_text="",
-        gen_text=text,
-    )
-    return wav, sr, "habibi-tts (ALG)"
+    try:
+        # Force fallback to gTTS for Arabic due to Habibi-TTS issues
+        logger.warning("[Arabic-TTS] Habibi-TTS has issues, forcing gTTS fallback for Arabic")
+        from app.layer3.tts.gtts_fallback import text_to_speech_gtts
+        
+        # Clean and validate text for Arabic
+        if not text or not text.strip():
+            logger.warning("Empty text provided to Arabic TTS")
+            raise ValueError("Empty text provided")
+        
+        # Ensure text is properly encoded for Arabic
+        clean_text = text.strip().encode('utf-8', errors='ignore').decode('utf-8')
+        
+        logger.debug(f"[Arabic-TTS] Converting text with gTTS fallback: {clean_text[:100]}...")
+        
+        # Use gTTS fallback for Arabic
+        return text_to_speech_gtts(clean_text, "ar")
+        
+    except Exception as e:
+        logger.error(f"[Arabic-TTS] ERROR: {type(e).__name__}: {str(e)}")
+        # Re-raise for fallback handling
+        raise e

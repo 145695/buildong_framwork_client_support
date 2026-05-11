@@ -83,8 +83,26 @@ class NemotronTranslationModel:
             return translated_text
 
         except Exception as e:
-            logger.error(f"[Translation] ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
-            return text
+            logger.warning(f"[Translation] NVIDIA failed: {e}. Trying fallback...")
+            try:
+                from deep_translator import GoogleTranslator
+                # Detect source language for proper translation
+                source_lang = detected_language if detected_language != "en" else "auto"
+                translated = GoogleTranslator(
+                    source=source_lang, 
+                    target="en"
+                ).translate(text)
+                logger.debug(f"[Translation] Fallback result: {translated}")
+                return translated
+            except Exception as fallback_error:
+                logger.error(f"[Translation] Fallback also failed: {fallback_error}")
+                # Check if it's a timeout/gateway error
+                if "504" in str(e) or "timeout" in str(e).lower() or "gateway" in str(e).lower():
+                    logger.warning("[Translation] Gateway timeout - using original text without translation")
+                    return text
+                else:
+                    logger.warning("[Translation] API error - using original text")
+                    return text
     
     def check_safety(self, text: str) -> str:
         """
