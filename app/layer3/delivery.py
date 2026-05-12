@@ -46,8 +46,14 @@ def _text_to_speech(text: str, language: str) -> tuple[bytes, int, str]:
 
 
 def deliver_response(state: ConversationState) -> ConversationState:
-    text = _unmask_pii(state.final_response_en, state.pii_map)
-    text = translate_from_english(text, state.source_language)
+    # Use localized response if available, otherwise translate from English
+    if state.final_response_localized and state.final_response_localized != state.final_response_en:
+        text = _unmask_pii(state.final_response_localized, state.pii_map)
+        logger.debug(f"[Layer3] Using localized response: {text[:50]}...")
+    else:
+        text = _unmask_pii(state.final_response_en, state.pii_map)
+        text = translate_from_english(text, state.source_language)
+        logger.debug(f"[Layer3] Translated from English: {text[:50]}...")
     text = _channel_refine(text, state.source_channel)
 
     # Generate audio if voice channel

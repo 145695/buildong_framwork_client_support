@@ -11,11 +11,29 @@ def router_node(state: ConversationState) -> ConversationState:
     """
     Semantic similarity-based agent routing using registry
     """
-    # Get user input from state
-    user_input = state.normalized_text_en or state.original_text or ""
+    # Get current input from state
+    current_input = state.normalized_text_en or state.original_text or ""
+    session_id = getattr(state, "conversation_id", None)
+
+    # Query reconstruction from history
+    reconstructed_query = current_input  # default: no history
+    
+    if session_id:
+        from app.layer2.shared.session_manager import get_session
+        session = get_session(session_id)
+        if session and len(session["history"]) > 0:
+            # Get last 2 user messages only
+            last_turns = session["history"][-2:]
+            past_messages = [turn["user"] for turn in last_turns]
+            # Simple concatenation — no LLM, no hallucination
+            reconstructed_query = " ".join(past_messages) + " " + current_input
+            print(f"[Orchestrator] Reconstructed query: {reconstructed_query}")
+
+    # Store in state for KB and client_support to use
+    state.reconstructed_query = reconstructed_query
     
     # Classify intent using real classifier
-    result = classifier.classify(user_input)
+    result = classifier.classify(reconstructed_query)
     intent = result.intent
     category = result.category
     

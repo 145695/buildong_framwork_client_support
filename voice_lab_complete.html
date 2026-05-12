@@ -497,6 +497,9 @@
         const summaryGrid = document.getElementById('summaryGrid');
         const stagesContainer = document.getElementById('stagesContainer');
         
+        // Session management
+        let sessionId = null;
+        
         // Voice output elements
         const voiceOutputSection = document.getElementById('voiceOutputSection');
         const detectedLang = document.getElementById('detectedLang');
@@ -543,6 +546,36 @@
 
         processBtn.addEventListener('click', processFullPipeline);
 
+        // Get session_id from URL or create new one
+        window.addEventListener('load', async () => {
+            // Try to get session_id from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlSessionId = urlParams.get('session_id');
+            
+            if (urlSessionId) {
+                sessionId = urlSessionId;
+                console.log('Using existing session:', sessionId);
+            } else {
+                // Create new session if none in URL
+                try {
+                    const response = await fetch('/test/session/create', { method: 'POST' });
+                    const data = await response.json();
+                    sessionId = data.session_id;
+                    console.log('Session created:', sessionId);
+                } catch (error) {
+                    console.error('Failed to create session:', error);
+                }
+            }
+        });
+
+        // Clean up session on page unload
+        window.addEventListener('beforeunload', () => {
+            if (sessionId) {
+                fetch(`/session/${sessionId}`, { method: 'DELETE' })
+                    .catch(error => console.error('Failed to end session:', error));
+            }
+        });
+
         async function processFullPipeline() {
             if (!audioInput.files.length) return;
 
@@ -553,6 +586,9 @@
 
             const formData = new FormData();
             formData.append('audio', audioInput.files[0]);
+            if (sessionId) {
+                formData.append('session_id', sessionId);
+            }
 
             try {
                 const response = await fetch('/test/voice-full-pipeline', {

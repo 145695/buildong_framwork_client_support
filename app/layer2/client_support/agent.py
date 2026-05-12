@@ -7,6 +7,7 @@ Uses LLaMA model to generate helpful responses based on knowledge base results.
 
 import logging
 from app.schemas.conversation import ConversationState
+from app.layer2.shared.session_manager import get_history_as_text
 
 # Load environment variables
 import os
@@ -23,7 +24,7 @@ def client_support_node(state: ConversationState) -> ConversationState:
     """
     Client Support node using LLaMA for final response generation
     
-    This node takes the results from the knowledge base (RAG system) and loan evaluation
+    This node takes results from knowledge base (RAG system) and loan evaluation
     and generates a helpful, conversational response for the customer.
     
     Args:
@@ -38,8 +39,15 @@ def client_support_node(state: ConversationState) -> ConversationState:
         # Get results from previous nodes
         kb_result = getattr(state, "kb_result", None)
         loan_result = getattr(state, "loan_result", None)
-        question = getattr(state, "normalized_text", "") or getattr(state, "original_text", "")
+        question = getattr(state, "reconstructed_query", None) \
+                   or getattr(state, "normalized_text_en", "") \
+                   or getattr(state, "original_text", "")
         intent = getattr(state, "intent", "")
+        
+        # Get conversation history if session_id exists
+        history_text = ""
+        if hasattr(state, 'conversation_id') and state.conversation_id:
+            history_text = get_history_as_text(state.conversation_id)
         
         # Build context from knowledge base and loan results
         context = f"Bank information: {kb_result}" if kb_result else ""
@@ -49,9 +57,9 @@ def client_support_node(state: ConversationState) -> ConversationState:
         # Create prompt for LLaMA model
         prompt = (
             "You are a friendly BNA bank customer service agent.\n"
-            "Using information below, answer the customer's question "
-            "in 2-3 natural conversational sentences.\n"
+            "Using information below, answer in 2-3 natural conversational sentences.\n"
             "No bullet points, no formatting, no markdown, plain text only.\n\n"
+            f"{f'Conversation so far:{chr(10)}{history_text}{chr(10)}' if history_text else ''}"
             f"Customer question: {question}\n"
             f"Intent: {intent}\n"
             f"{context}\n\n"

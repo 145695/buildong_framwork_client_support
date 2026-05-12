@@ -39,8 +39,10 @@ def knowledge_base_node(state: ConversationState) -> ConversationState:
         asyncio.set_event_loop(loop)
         try:
             rag = loop.run_until_complete(get_rag_system())
-            question = state.normalized_text_en or state.original_text or ""
-            result = loop.run_until_complete(rag.ask_question(question))
+            # Use reconstructed_query if available, fallback to normalized_text_en
+            query = getattr(state, "reconstructed_query", None) or state.normalized_text_en or state.original_text or ""
+            print(f"KB searching: {query}")
+            result = loop.run_until_complete(rag.ask_question(query))
             return result
         finally:
             loop.close()

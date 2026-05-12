@@ -121,9 +121,11 @@ app.add_middleware(
 
 from app.routers.chat import router as chat_router
 from app.routers.voice import router as voice_router
+from app.routers.session import router as session_router
 
 app.include_router(chat_router)
 app.include_router(voice_router)
+app.include_router(session_router)
 
 
 @app.get("/")
@@ -398,6 +400,98 @@ async def voice_orchestrator_ui():
     </html>
     """
     from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/voice-lab", summary="BNA Virtual Agent Landing Page")
+async def voice_lab_landing():
+    """Simple landing page for starting conversations"""
+    from fastapi.responses import HTMLResponse
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>BNA Virtual Agent</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
+            .container { text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            h1 { color: #333; margin-bottom: 30px; }
+            .start-btn { background: #007bff; color: white; border: none; padding: 20px 40px; font-size: 18px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; transition: background 0.3s; }
+            .start-btn:hover { background: #0056b3; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>BNA Virtual Agent</h1>
+            <button class="start-btn" onclick="startConversation()">📞 Start Conversation</button>
+        </div>
+        <script>
+            async function startConversation() {
+                try {
+                    const response = await fetch('/test/session/create', { method: 'POST' });
+                    const data = await response.json();
+                    const sessionId = data.session_id;
+                    window.location.href = '/voice-lab/session/' + sessionId;
+                } catch (error) {
+                    console.error('Failed to start conversation:', error);
+                    alert('Failed to start conversation. Please try again.');
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/voice-lab/session/{session_id}", summary="Voice Pipeline with Session")
+async def voice_lab_session(session_id: str):
+    """Voice pipeline interface with session management"""
+    from fastapi.responses import HTMLResponse
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>BNA Virtual Agent - Session {session_id[:8]}...</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
+            .header {{ background: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+            .session-info {{ color: #666; font-size: 14px; }}
+            .end-btn {{ background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; float: right; }}
+            .end-btn:hover {{ background: #c82333; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="session-info">Session ID: {session_id}</div>
+                <button class="end-btn" onclick="endCall()">📵 End Call</button>
+                <div style="clear: both;"></div>
+            </div>
+            <iframe src="/voice-lab-complete?session_id={session_id}" style="width: 100%; height: 800px; border: none; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></iframe>
+        </div>
+        <script>
+            const sessionId = '{session_id}';
+            
+            async function endCall() {{
+                if (confirm('Are you sure you want to end this call?')) {{
+                    try {{
+                        const response = await fetch(`/test/session/${{sessionId}}`, {{ method: 'DELETE' }});
+                        const data = await response.json();
+                        if (data.success) {{
+                            window.location.href = '/voice-lab';
+                        }}
+                    }} catch (error) {{
+                        console.error('Failed to end call:', error);
+                        alert('Failed to end call. Please try again.');
+                    }}
+                }}
+            }}
+        </script>
+    </body>
+    </html>
+    """
     return HTMLResponse(content=html_content)
 
 

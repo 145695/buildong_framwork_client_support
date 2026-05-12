@@ -12,11 +12,26 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 import soundfile as sf
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import Optional
 
 router = APIRouter(prefix="/test", tags=["Layer Tests"])
+
+
+def validate_language(detected_language: str) -> str:
+    """Validate and normalize detected language to supported languages"""
+    SUPPORTED_LANGUAGES = ["ar", "fr", "en"]
+    if detected_language in SUPPORTED_LANGUAGES:
+        return detected_language
+    # Default to Arabic for unsupported languages
+    # since BNA customers are primarily Algerian
+    logger.warning(
+        f"[Language] Unsupported language detected: '{detected_language}'. "
+        f"Defaulting to Arabic."
+    )
+    return "ar"
 
 
 @router.post("/stt", summary="Test Layer 1: Whisper STT (NVIDIA Riva gRPC)")
@@ -309,7 +324,10 @@ async def voice_to_orchestrator(audio: UploadFile = File(...)):
         print(f"NVIDIA Riva API error: {error_str}")
         raise HTTPException(500, f"Speech-to-text failed: {error_str}")
 
-    # Step 2: Translation Gate - Conditional routing based on language
+    # Step 2: Apply language validation
+    detected_language = validate_language(detected_language)
+    
+    # Step 3: Translation Gate - Conditional routing based on language
     text_for_ingestion = transcription
     translation_applied = False
 
@@ -657,7 +675,7 @@ async def test_tts(req: TTSRequest):
 
 
 @router.post("/voice-full-pipeline", summary="Complete Voice Pipeline: STT -> Translator -> Orchestrator -> Knowledge Base")
-async def voice_full_pipeline(audio: UploadFile = File(...)):
+async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optional[str] = Form(None)):
     """
     Complete voice pipeline showing all stages:
     Voice input -> Layer 1 STT -> Translation Gate -> Layer 1 Ingestion -> Layer 2 Orchestrator -> Knowledge Base -> Output
@@ -666,7 +684,19 @@ async def voice_full_pipeline(audio: UploadFile = File(...)):
     from app.layer1.ingestion import ingest_chat_request
     from app.layer2.orchestrator import smart_pm_routing
     from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
+    from app.layer2.shared.session_manager import create_session, get_session, add_to_history
     from app.schemas.conversation import ChatRequest, SourceChannel
+
+    # Step 1: Session Management
+    if session_id:
+        # Get existing session
+        session = get_session(session_id)
+        if not session:
+            # Session expired, create new one
+            session_id = create_session()
+    else:
+        # No session_id provided, create new session
+        session_id = create_session()
 
     # Initialize results dictionary
     results = {
@@ -834,7 +864,10 @@ async def voice_full_pipeline(audio: UploadFile = File(...)):
         }
         raise HTTPException(500, f"Speech-to-text failed: {error_str}")
 
-    # Step 2: Translation Gate - Conditional routing based on language
+    # Step 2: Apply language validation
+    detected_language = validate_language(detected_language)
+    
+    # Step 3: Translation Gate - Conditional routing based on language
     text_for_ingestion = transcription
     translation_applied = False
 
@@ -888,7 +921,7 @@ async def voice_full_pipeline(audio: UploadFile = File(...)):
             message=text_for_ingestion,
             source_language=detected_language,
             source_channel=SourceChannel.VOICE,
-            conversation_id=None
+            conversation_id=session_id
         )
         
         state = ingest_chat_request(chat_request)
@@ -972,6 +1005,9 @@ async def voice_full_pipeline(audio: UploadFile = File(...)):
                 results["audio_sample_rate"] = audio_state.audio_sample_rate
                 results["final_response_localized"] = audio_state.final_response_localized
                 logger.debug(f"[Layer3] Audio generated: {len(audio_state.final_response_audio)} bytes")
+                
+                # Step 4.5: Add to conversation history
+                add_to_history(session_id, text_for_ingestion, localized_response or english_response)
         
     except Exception as e:
         results["stages"]["orchestrator"] = {
@@ -1020,6 +1056,7 @@ async def voice_full_pipeline(audio: UploadFile = File(...)):
         "total_stages": 5,
         "successful_stages": sum(1 for stage in results["stages"].values() if stage.get("success", False)),
         "conversation_id": str(state.conversation_id),
+        "session_id": session_id,  # Return session_id for frontend
         "original_transcription": transcription,
         "detected_language": detected_language,
         "translation_applied": translation_applied
@@ -1031,6 +1068,30 @@ async def voice_full_pipeline(audio: UploadFile = File(...)):
         results["selected_agent"] = results["stages"]["orchestrator"]["required_agents"][0] if results["stages"]["orchestrator"]["required_agents"] else "unknown"
 
     return results
+
+
+@router.post("/session/create", summary="Create new session")
+async def create_session():
+    """Create a new conversation session"""
+    from app.layer2.shared.session_manager import create_session
+    session_id = create_session()
+    return {"session_id": session_id}
+
+
+@router.get("/session/create", summary="Create new session (GET)")
+async def create_session_get():
+    """Create a new conversation session via GET"""
+    from app.layer2.shared.session_manager import create_session
+    session_id = create_session()
+    return {"session_id": session_id}
+
+
+@router.delete("/session/{session_id}", summary="End session")
+async def end_session(session_id: str):
+    """End a conversation session and clean up history"""
+    from app.layer2.shared.session_manager import end_session
+    end_session(session_id)
+    return {"success": True, "message": "Session ended"}
 
 
 @router.get("/download/{filename}", summary="Download generated audio file")

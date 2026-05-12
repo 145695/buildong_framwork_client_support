@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -46,6 +46,7 @@ class ConversationState(BaseModel):
     agent_feedback: dict[str, Any] = Field(default_factory=dict)
     kb_result: str | None = None
     loan_result: Any | None = None
+    reconstructed_query: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
