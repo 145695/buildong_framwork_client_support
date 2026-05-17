@@ -915,6 +915,31 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             "reason": f"Language already English or unknown: {detected_language}"
         }
 
+    # Security Layer 1: Input validation before ingestion
+    try:
+        from app.security_layer1.security_screening import scan_input
+        security_check = scan_input(text_for_ingestion)
+        
+        if not security_check["is_safe"]:
+            logger.warning(f"[Security-L1] Blocked: {security_check['reason']}")
+            return {
+                "success": False,
+                "blocked": True,
+                "message": security_check["reason"]
+            }
+        
+        results["stages"]["security_layer1"] = {
+            "success": True,
+            "is_safe": True,
+            "risk_score": security_check["risk_score"]
+        }
+    except Exception as e:
+        logger.error(f"[Security-L1] ERROR: {str(e)}")
+        results["stages"]["security_layer1"] = {
+            "success": False,
+            "error": str(e)
+        }
+
     # Step 3: Pass transcription to Layer 1 ingestion
     try:
         chat_request = ChatRequest(
@@ -968,6 +993,23 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             
             # Step 1: Get English response from client_support
             english_response = final_state.final_response_en
+
+            # Security Layer 2: NeMo Guard output validation
+            try:
+                from app.security_layer2.output_validator import validate_output
+                validated_response = validate_output(english_response)
+                results["stages"]["security_layer2"] = {
+                    "success": True,
+                    "modified": validated_response != english_response
+                }
+                english_response = validated_response
+                final_state.final_response_en = english_response
+            except Exception as e:
+                logger.error(f"[Security-L2] ERROR: {str(e)}")
+                results["stages"]["security_layer2"] = {
+                    "success": False,
+                    "error": str(e)
+                }
             
             # Step 2: Translate back to user's original language
             from app.layer3.translation.translator import translate_from_english

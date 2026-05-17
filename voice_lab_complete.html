@@ -654,6 +654,27 @@
             // Display ALL stages with complete details
             let stagesHtml = '';
             
+            // Security Layer 1: Input Validation
+            const securityLayer1 = data.stages.security_layer1;
+            if (securityLayer1) {
+                stagesHtml += createStageCard('🔒 Security Layer 1 (Input)', securityLayer1, `
+                    <div class="stage-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Is Safe:</span>
+                            <span class="detail-value">${securityLayer1.is_safe ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Risk Score:</span>
+                            <span class="detail-value">${securityLayer1.risk_score || 'N/A'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Success:</span>
+                            <span class="detail-value">${securityLayer1.success ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                    </div>
+                `);
+            }
+
             // STT Stage
             const sttStage = data.stages.whisper_stt;
             stagesHtml += createStageCard('🎤 Speech-to-Text', sttStage, `
@@ -807,6 +828,35 @@
                         <strong>Final Response to User:</strong>
                         <div style="margin-top: 10px; padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px; white-space: pre-wrap; font-family: inherit; line-height: 1.6; font-size: 16px; color: #155724;">
                             ${data.agent_response}
+                        </div>
+                    </div>
+                `);
+            }
+
+            // Security Layer 2: Output Validation
+            const securityLayer2 = data.stages.security_layer2;
+            if (securityLayer2) {
+                stagesHtml += createStageCard('🔒 Security Layer 2 (Output)', securityLayer2, `
+                    <div class="stage-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Success:</span>
+                            <span class="detail-value">${securityLayer2.success ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Modified:</span>
+                            <span class="detail-value">${securityLayer2.modified ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                        ${securityLayer2.error ? `
+                        <div class="detail-row">
+                            <span class="detail-label">Error:</span>
+                            <span class="detail-value" style="color: #dc3545;">${securityLayer2.error}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="stage-content" style="margin-top: 15px;">
+                        <strong>Validation Method:</strong>
+                        <div style="margin-top: 8px; padding: 10px; background: #e9ecef; border-radius: 4px; font-size: 12px;">
+                            NeMo Guard NIM - Content Safety & Topic Control
                         </div>
                     </div>
                 `);
