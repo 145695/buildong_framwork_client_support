@@ -1,0 +1,54 @@
+question_id,question,source_doc,retrieval_precision,answer_relevance,faithfulness,latency_seconds,retrieved_chunks_count,answer,sources,error
+1,Quel est le montant annuel des frais de tenue d'un compte chèque pour un particulier ?,CGB_Particuliers,0.6666666666666666,1.0,0.0,1.3848149999976158,3,"**Réponse :**
+Pour un particulier, le montant annuel des frais de tenue de compte en Dinars est de **3 600 DA** (900 DA par trimestre).",Brochure_tarifaire_ENTREPRISE_Janvier_2026.pdf; CGB-web-particulier.pdf; CGB-web-professionnels.pdf,
+2,Quels sont les frais appliqués pour une demande d'historique de compte ?,CGB_Particuliers,0.0,0.75,0.0,1.4940045999974245,3,"D'après les documents fournis, **les frais appliqués pour une demande d'historique de compte ne sont pas mentionnés** dans les extraits disponibles.
+
+Pour obtenir cette information, je vous invite à :
+- Consulter votre **contrat bancaire** ou la **grille tarifaire** de la BNA,
+- Contacter votre **agence bancaire** ou le **service client** de la BNA.",notice-information-opv-n2024-01_fr.pdf; REG-N°25-07-FR.pdf,
+3,Quel est le coût d'un retrait d'espèces par carte CIB en interbancaire ?,CGB_Particuliers,0.6666666666666666,1.0,1.0,1.2302766000066185,3,"Le coût d'un retrait d'espèces par carte CIB en interbancaire est de **35 DA TTC** (date de valeur J-1), selon les tarifs applicables aux particuliers.",Brochure_tarifaire_ENTREPRISE_Janvier_2026.pdf; CGB-web-particulier.pdf; CGB-web-professionnels.pdf,
+4,Quel est le taux d'intérêt appliqué à un compte épargne dont le solde est inférieur à 1 000 000 DA ?,CGB_Particuliers,0.3333333333333333,1.0,0.0,1.4427658000058727,3,"D'après les extraits fournis, le taux d'intérêt appliqué à un **compte épargne** dont le solde est **inférieur à 1 000 000 DA** est de **2,50 %**.
+
+*(Source : Extrait [CGB-web-particulier.pdf] – ligne ""Compte épargne 2,50 %"")*.",F2023043_montaire_et_bancaite_FR_1.pdf; CGB-web-particulier.pdf; notice-information-opv-n2024-01_fr.pdf,
+5,Quels sont les frais de commission sur les opérations de change pour les particuliers ?,CGB_Particuliers,0.3333333333333333,1.0,1.0,1.4720049999887124,3,"Les frais de commission sur les opérations de change pour les particuliers à la BNA sont les suivants :
+- **Vente de devises** : 2‰ avec un minimum de 500 DA.
+- **Achat de devises** : Gratuit.
+
+Si vous souhaitez des informations sur d'autres types d'opérations de change, précisez votre demande.",REG-N°25-07-FR.pdf; REG-N°25-10-FR.pdf; CGB-web-particulier.pdf,
+6,Quel est le montant des frais de tenue de compte en Dinars pour les entreprises par trimestre ?,Brochure_Entreprises,0.0,0.5,0.0,1.719830699992599,3,"Le contexte fourni ne mentionne **aucun montant spécifique** pour les frais de tenue de compte en Dinars pour les entreprises par trimestre.
+
+Pour obtenir cette information, je vous invite à consulter :
+- La section dédiée aux **comptes entreprises** dans la brochure tarifaire officielle.
+- Ou à contacter directement votre agence BNA pour une réponse précise.",CGB-web-professionnels.pdf; Brochure_tarifaire_ENTREPRISE_Janvier_2026.pdf; Loi-monetaire-et-bancaire.pdf,
+7,Quel est le tarif de l'abonnement mensuel au service SOGECASH NET Pack Base ?,Brochure_Entreprises,0.0,1.0,0.0,1.3980693000048632,3,"Le tarif de l'abonnement mensuel au service **SOGECASH NET Pack Base** n'est pas mentionné dans les extraits fournis. Pour obtenir cette information, je vous invite à consulter directement votre agence BNA ou à contacter le service client dédié.",Brochure_tarifaire_ENTREPRISE_Janvier_2026.pdf; Loi-monetaire-et-bancaire.pdf,
+8,Quels sont les frais pour un virement de compte à compte effectué dans la même agence BNA ?,Brochure_Entreprises,0.6666666666666666,1.0,1.0,1.1654727999994066,3,Un virement de compte à compte effectué dans la **même agence BNA** est **gratuit** (J-1).,CGB-web-entreprise.pdf; CGB-web-professionnels.pdf,
+9,Quelles sont les conditions tarifaires pour l'encaissement de chèques sur place pour les entreprises ?,Brochure_Entreprises,0.0,0.75,0.0,1.4031875000073342,3,"Les conditions tarifaires pour l'encaissement de chèques sur place pour les entreprises ne sont pas explicitement mentionnées dans les extraits fournis. Veuillez préciser si vous souhaitez des informations sur les chèques locaux ou étrangers, ou consulter le service client de la BNA pour obtenir les tarifs exacts.",CGB-web-entreprise.pdf; F2023043_montaire_et_bancaite_FR_1.pdf; notice-information-opv-n2024-01_fr.pdf; Loi-monetaire-et-bancaire.pdf,
+10,Quel est le coût d'un chèque de banque émis pour le compte d'une entreprise ?,Brochure_Entreprises,0.6666666666666666,1.0,1.0,1.0057115000090562,3,"D'après les documents officiels de la BNA, l'émission d'un chèque de banque pour le compte d'une entreprise est **gratuit** (paiement des chèques de banque tirés sur nos caisses).",CGB-web-entreprise.pdf; Loi-monetaire-et-bancaire.pdf; CGB-web-professionnels.pdf,
+11,Quel est l'âge maximum pour être éligible à un crédit immobilier à la BNA ?,Fiche_Credit_Immobilier,0.0,0.5,0.0,1.2240377999987686,2,"D'après les documents consultés, **l'âge maximum pour être éligible à un crédit immobilier à la BNA n'est pas mentionné**.
+
+Pour obtenir cette information, je vous invite à consulter directement votre conseiller bancaire ou à vérifier les conditions générales disponibles en agence.",CGB-web-professionnels.pdf; CGB-web-particulier.pdf,
+12,Quel est le taux d'intérêt sans bonification appliqué aux clients non épargnants pour un crédit immobilier ?,Fiche_Credit_Immobilier,1.0,1.0,1.0,0.8845230000006268,2,"Le taux d'intérêt sans bonification appliqué aux clients non épargnants pour un crédit immobilier est de **6,25%**.",Fiche_Credit_Immobilier.pdf; CGB-web-particulier.pdf,
+13,Quelle est la durée maximale de remboursement d'un crédit immobilier accordé par la BNA ?,Fiche_Credit_Immobilier,0.5,1.0,0.0,1.1629751000000397,2,"D'après les documents officiels, la durée maximale de remboursement d'un crédit immobilier accordé par la BNA est **jusqu'à 30 ou 40 ans**, avec une limite d'âge de 70 à 75 ans à la fin du prêt.",CGB-web-professionnels.pdf; Dossier_Complet_Credit_Immobilier_Algerie.pdf,
+14,Un client de moins de 40 ans peut-il bénéficier d'un financement à 100 % pour son crédit immobilier ?,Fiche_Credit_Immobilier,1.0,1.0,0.0,1.2188420000020415,2,"D'après les documents officiels, un client de moins de 40 ans peut bénéficier d'un financement à 100 % pour son crédit immobilier **sous conditions**.",Fiche_Credit_Immobilier.pdf; CGB-web-particulier.pdf,
+15,Quels sont les documents requis pour constituer un dossier de crédit immobilier à la BNA ?,Fiche_Credit_Immobilier,1.0,0.75,0.0,2.0518333000072744,2,"Pour un crédit immobilier à la BNA, les documents requis dépendent du type d'acquisition :
+
+- **Logement achevé** : Un document justifiant l’attribution du logement (prix, consistance, adresse).
+- **Vente sur plans** : Contrat de vente notarié, enregistré et publié, ainsi que l’attestation de garantie du F.G.C.M.P.I en cours de validité.
+- **Auto-construction** : Copie de l’acte de propriété du terrain ou du certificat de possession, enregistrés et publiés.
+
+Pour les crédits bonifiés (logement rural ou autres), les mêmes documents sont demandés, avec éventuellement une décision d’octroi d’aide frontale CNL pour la construction rurale.",credit-immo-1.pdf; Dossier_Complet_Credit_Immobilier_Algerie.pdf,
+16,Quel est le seuil du taux d'intérêt excessif pour les découverts au premier semestre 2026 ?,Note_TEG,0.6666666666666666,1.0,1.0,1.3862905000132741,3,"Le seuil du taux d'intérêt excessif pour les découverts au premier semestre 2026 est de **8,26 %**.
+
+*(Source : Note relative aux seuils des taux d’intérêt excessifs applicables au titre du premier semestre 2026, fixant ce seuil à partir du taux effectif moyen de 7,51 % du deuxième semestre 2025.)*",NOTE-TEG-02-2025-WEB.pdf; Instruction-02-26-Fr-1.pdf; CGB-web-entreprise.pdf,
+17,Quel est le seuil du taux d'intérêt excessif applicable au leasing selon la note TEG ?,Note_TEG,0.3333333333333333,0.5,0.0,2.069757599994773,3,"Le seuil du taux d'intérêt excessif applicable au leasing n'est pas explicitement mentionné dans les extraits fournis. Les documents citent uniquement les seuils pour les découverts et les crédits à la consommation.
+
+**Clarification** : Veuillez préciser si vous souhaitez le seuil pour :
+- Un leasing mobilier ou immobilier ?
+- Une catégorie spécifique de leasing ?
+
+Je vous invite à consulter la note officielle ou à contacter le service concerné pour obtenir cette information.",NOTE-TEG-02-2025-WEB.pdf; CGB-web-entreprise.pdf; reglement202001.pdf,
+18,Quel est le seuil du taux excessif pour les crédits à la consommation au premier semestre 2026 ?,Note_TEG,0.3333333333333333,1.0,1.0,1.2542046000016853,3,"Le seuil du taux excessif pour les crédits à la consommation au premier semestre 2026 est de **10,36 %**.",NOTE-TEG-02-2025-WEB.pdf; CGB-web-entreprise.pdf; CGB-web-professionnels.pdf,
+19,Quelle est la recette traditionnelle pour préparer un couscous algérien ?,,nan,1.0,nan,0.12123680001241155,0,Je n'ai pas trouve d'information sur ce sujet dans notre base de connaissances.,,
+20,Quels sont les tarifs pour ouvrir un compte bancaire domicilié en France avec la BNA ?,,0.0,1.0,0.0,1.4292874000093434,3,"La BNA ne propose pas d'ouverture de compte bancaire domicilié en France dans les documents fournis. Les tarifs et conditions pour ce type d'opération ne sont pas mentionnés dans les extraits disponibles.
+
+Pour obtenir cette information, je vous invite à contacter directement la BNA ou à consulter leur site officiel.",F2023043_montaire_et_bancaite_FR_1.pdf; reglement202001.pdf,

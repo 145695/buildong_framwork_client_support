@@ -1,30 +1,35 @@
 question_id,question,answer,sources,confidence,documents_found,latency_seconds,retrieval_precision_at_5,answer_relevance_score,faithfulness_score,retrieved_chunks_count
-1,What are the fees for opening a checking account for individuals?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,1.1292262077331543,0.0,0.25,True,0
-2,How much does it cost annually to maintain a savings account?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.617624044418335,0.0,0.25,True,0
-3,What are the fees for account management for junior savings accounts?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6510553359985352,0.0,0.5,True,0
-4,What are the charges for dormant accounts without transactions?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6434423923492432,0.0,0.5,True,0
-5,How much does it cost to request an account history statement?,"**Réponse :**
-Le coût pour demander un historique de compte est de **150 DA**, que ce soit pour un particulier ou un professionnel.",notice-information-opv-n2024-01_fr.pdf; CGB-web-professionnels.pdf; CGB-web-particulier.pdf; LD-02-2025-FR.pdf; REG-N°25-10-FR.pdf; REG-N°25-07-FR.pdf; reglement202001.pdf,0.5760358572006226,7,0.9010970592498779,0.4,1.0,True,8
-6,What are the fees for closing an account?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.7344133853912354,0.0,0.5,True,0
-7,How much do bank transfers cost between agencies?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.7963643074035645,0.0,0.5,True,0
-8,What are the fees for cash withdrawals at other branches?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.9345061779022217,0.0,0.5,True,0
-9,How much do cash deposits to savings accounts cost?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6594135761260986,0.0,0.5,True,0
-10,What are the fees for check opposition and cash book stops?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6495099067687988,0.0,0.25,True,0
-11,How much does it cost to process succession documents?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6506893634796143,0.0,0.25,True,0
-12,What are the charges for document photocopying at the bank?,"**Frais de photocopie à la BNA : 50 DA par photocopie.**
+1,Combien coûte la tenue d'un compte chèque par an pour un particulier ?,"**Frais de tenue de compte chèque pour un particulier : 900 DA par trimestre (soit 3 600 DA par an).**
 
-Cette tarification s'applique aux particuliers, professionnels et entreprises, selon les documents consultés.",CGB-web-professionnels.pdf; CGB-web-entreprise.pdf; REG-N°25-07-FR.pdf; REG-N°25-10-FR.pdf; CGB-web-particulier.pdf; F2023043_montaire_et_bancaite_FR_1.pdf,0.5976951122283936,6,0.8622851371765137,0.6,1.0,True,8
-13,How much do account research fees cost per document?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6016473770141602,0.0,0.25,True,0
-14,What is the maximum financing percentage for real estate loans?,Financement possible à 100% (maximum 20 millions DA) pour les crédits immobiliers.,F2025088.pdf; CGB-web-particulier.pdf; Loi_de_finance_2025_FR.pdf; notice-information-opv-n2024-01_fr.pdf; NOTE-TEG-02-2025-WEB.pdf; Fiche_Credit_Immobilier.pdf,0.7096325159072876,6,0.7512967586517334,0.0,0.5,False,7
-15,What are the interest rates for real estate loans without bonuses?,Une erreur technique est survenue.,,0.0,0,0.39435696601867676,0.0,0.5,False,0
-16,What interest rates apply to saving customers for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.3913383483886719,0.0,0.5,False,0
-17,What are the interest rates for borrowers under 40 years old?,Une erreur technique est survenue.,,0.0,0,0.40137481689453125,0.0,0.5,False,0
-18,What is the maximum duration for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.39601993560791016,0.0,0.5,False,0
-19,How long does it take to process a real estate loan application?,Une erreur technique est survenue.,,0.0,0,0.3958096504211426,0.0,0.5,False,0
-20,What is the maximum amount for 100% financing for young borrowers?,Une erreur technique est survenue.,,0.0,0,0.40929222106933594,0.0,0.5,False,0
-21,What are the eligibility criteria for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.44972896575927734,0.0,0.5,False,0
-22,What is the age limit for real estate loan applicants?,Une erreur technique est survenue.,,0.0,0,0.41336822509765625,0.0,0.5,False,0
-23,What income requirements exist for real estate loans?,Une erreur technique est survenue.,,0.0,0,0.40132665634155273,0.0,0.5,False,0
-24,What repayment deferral periods are available for different loan types?,Une erreur technique est survenue.,,0.0,0,0.4209935665130615,0.0,0.5,False,0
-25,Can co-borrowers be included to increase loan capacity?,Une erreur technique est survenue.,,0.0,0,0.40435791015625,0.0,0.5,False,0
-26,What are the fees for consumer and real estate loan applications?,Une erreur technique est survenue.,,0.0,0,0.4034128189086914,0.0,0.5,False,0
+Ces frais s'appliquent à la tenue de compte en dinars pour les particuliers, selon les tarifs indiqués dans les documents.",Brochure_tarifaire_ENTREPRISE_Janvier_2026.pdf; CGB-web-entreprise.pdf; CGB-web-particulier.pdf; F2025088.pdf; notice-information-opv-n2024-01_fr.pdf,0.5667247772216797,5,1.0979254245758057,0.4,1.0,True,8
+2,Quels sont les frais pour une demande d'historique de compte ?,Demande d’historique de compte : **150 DA**.,notice-information-opv-n2024-01_fr.pdf; CGB-web-professionnels.pdf; F2025088.pdf; CGB-web-entreprise.pdf; CGB-web-particulier.pdf,0.6557274460792542,5,0.7837824821472168,0.2,1.0,True,8
+3,Quel est le coût d'un retrait d'espèces par carte CIB en interbancaire ?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,1.0256102085113525,0.0,0.25,False,0
+4,Quel est le taux d'intérêt pour un compte épargne dont le solde est de 1 000 000 DA ?,"CLARIFICATION : Le taux d'intérêt pour un compte épargne de 1 000 000 DA dépend du type de compte. Selon les documents, les taux applicables sont :
+- **Livret épargne classique / MOUSTAKBALY** : entre **2,5%** et **3,50%** (taux variable selon conditions bancaires).
+Quel type de compte épargne souhaitez-vous ouvrir ?",CGB-web-professionnels.pdf; notice-information-opv-n2024-01_fr.pdf; REG-N°25-10-FR.pdf,0.7237874269485474,3,1.2054684162139893,0.0,1.0,True,8
+5,Quels sont les frais de tenue de compte en Dinars pour les entreprises par trimestre ?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.7968151569366455,0.0,0.5,False,0
+6,Combien coûte l'abonnement mensuel au service SOGECASH NET Pack base ?,Le coût mensuel de l'abonnement au service **SOGECASH NET Pack base** est de **3 000 DA HT** (hors taxes).,Brochure_tarifaire_ENTREPRISE_Janvier_2026.pdf; Loi_de_finance_2025_FR.pdf; notice-information-opv-n2024-01_fr.pdf; CGB-web-professionnels.pdf; F2025088.pdf,0.49687883257865906,5,0.9284884929656982,0.2,1.0,True,8
+7,Quels sont les frais pour un virement de compte à compte dans la même agence ?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.6442463397979736,0.0,0.5,False,0
+8,Quel est l'âge limite pour demander un crédit immobilier ?,"CLARIFICATION : L'âge limite pour demander un crédit immobilier dépend-il de la durée du prêt ou de l'âge à la fin du remboursement ?
+
+1. **Durée du prêt** : Jusqu'à 30 ou 40 ans (selon le document).
+2. **Âge à la fin du remboursement** : Limite fixée entre 70 et 75 ans.",CGB-web-professionnels.pdf; Dossier_Complet_Credit_Immobilier_Algerie.pdf; notice-information-opv-n2024-01_fr.pdf; REG-N°25-07-FR.pdf; F2025088.pdf; credit-immo-1.pdf,0.5971407294273376,6,1.2289226055145264,0.0,1.0,True,8
+9,Quel est le taux d'intérêt sans bonification pour les clients non épargnants pour un crédit immobilier ?,"CLARIFICATION : Souhaitez-vous connaître le taux d'intérêt pour un crédit immobilier à long terme (habitat) pour un client non épargnant, ou bien pour un crédit spécifique comme le ""Dari Aménagement"" ou ""Crédit location"" ? Les options disponibles dans les documents sont :
+1) Crédit immobilier à long terme (habitat) pour client non épargnant : 6,25%
+2) Crédit Dari Aménagement sans hypothèque pour client non épargnant : 7,25%
+3) Crédit location pour client non épargnant : 7,25%",NOTE-TEG-02-2025-WEB.pdf; CGB-web-professionnels.pdf; F2025088.pdf; CGB-web-entreprise.pdf; CGB-web-particulier.pdf,0.7262982130050659,5,1.5986583232879639,0.2,1.0,True,6
+10,Quelle est la durée maximale pour le remboursement d'un crédit immobilier ?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.8861677646636963,0.0,0.5,False,0
+11,Puis-je bénéficier d'un financement à 100% si j'ai moins de 40 ans pour mon crédit immobilier ?,"**CLARIFICATION :**
+Votre question concerne deux cas distincts pour un financement à 100% dans le cadre d'un crédit immobilier à la BNA. Pouvez-vous préciser si vous visez :
+1. Un **prêt jeune** (programme spécifique pour les moins de 40 ans) ?
+2. Un **crédit immobilier classique** (hors programme jeune) ?
+
+*(Les documents mentionnent un financement à 100% pour le ""Prêt Jeune 100%"" mais ne précisent pas son éligibilité par âge pour les autres crédits.)*",F2025088.pdf; Fiche_Credit_Immobilier.pdf; CGB-web-professionnels.pdf; credit-immo-1.pdf; REG-N°25-07-FR.pdf; Dossier_Complet_Credit_Immobilier_Algerie.pdf; notice-information-opv-n2024-01_fr.pdf,0.6334431767463684,7,1.4314322471618652,0.2,0.75,False,8
+12,Quel est le seuil du taux d'intérêt excessif pour les découverts au premier semestre 2026 ?,"Le seuil du taux d'intérêt excessif pour les découverts au premier semestre 2026 est de **8,26 %**.
+
+Ce seuil est déterminé en application de l'instruction n° 08-16 du 1er septembre 2016, modifiée et complétée, et est basé sur le taux d'intérêt effectif moyen de 7,51 % pour cette catégorie de concours.",NOTE-TEG-02-2025-WEB.pdf; notice-information-opv-n2024-01_fr.pdf,0.8447731137275696,2,1.3474457263946533,0.6,1.0,True,5
+13,Quel est le seuil du taux d'intérêt excessif pour le leasing ?,"CLARIFICATION : Le leasing est-il considéré comme un crédit à la consommation ou un crédit à moyen terme selon les documents fournis ?
+
+*(Les documents mentionnent des seuils pour les crédits à la consommation et à moyen terme, mais ne précisent pas explicitement la catégorie du leasing.)*",F2025088.pdf; NOTE-TEG-02-2025-WEB.pdf; Loi_de_finance_2025_FR.pdf; notice-information-opv-n2024-01_fr.pdf,0.7403271198272705,4,1.2160966396331787,0.4,0.5,False,6
+14,Quelle est la recette pour préparer un bon couscous algérien traditionnel ?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.7677211761474609,0.0,0.5,False,0
+15,Quels sont les tarifs pour ouvrir un compte bancaire domicilié en France avec la BNA ?,Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.,,0.0,0,0.8576152324676514,0.0,0.25,False,0

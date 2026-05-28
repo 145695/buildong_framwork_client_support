@@ -24,6 +24,10 @@ import unicodedata
 import pickle
 import hashlib
 
+# Lightweight KG (GraphRAG)
+from .graph_store import GraphStore, GraphTriple
+from .triple_extractor import TripleExtractor
+
 # Set UTF-8 encoding for stdout
 if sys.stdout.encoding != 'utf-8':
     try:
@@ -34,23 +38,35 @@ if sys.stdout.encoding != 'utf-8':
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-# Try to import vector components
+# Try to import embedding + ANN components (separately for better fallbacks)
 try:
     from sentence_transformers import SentenceTransformer
-    import faiss
-    VECTOR_AVAILABLE = True
+    EMBEDDINGS_AVAILABLE = True
 except ImportError as e:
-    VECTOR_AVAILABLE = False
-    logging.warning(f"Vector components not available: {e}")
+    EMBEDDINGS_AVAILABLE = False
+    logging.warning(f"Embedding components not available: {e}")
+
+try:
+    import faiss  # type: ignore
+    FAISS_AVAILABLE = True
+except ImportError as e:
+    FAISS_AVAILABLE = False
+    logging.warning(f"FAISS not available: {e}")
 
 logger = logging.getLogger(__name__)
+
+try:
+    import pdfplumber
+    PDFPLUMBER_AVAILABLE = True
+except ImportError:
+    PDFPLUMBER_AVAILABLE = False
 
 
 
 class IntelligentRAGSystem:
     """Intelligent RAG system with zero hardcoded rules"""
     
-    def __init__(self, policies_dir: str = None, llm=None):
+    def __init__(self, policies_dir: str = None, llm=None, enable_graph_llm_extraction: Optional[bool] = None):
         base = Path(__file__).parent.parent.parent.parent
         self.text_dir = base / "policies_text"   # reads from .txt files
         self.policies_dir = base / "policies"     # kept for reference
@@ -58,15 +74,27 @@ class IntelligentRAGSystem:
         self.documents = []
         self.document_chunks = []
         self.document_profiles = {}
+
+        # Lightweight knowledge graph (optional but local-only)
+        self.graph_store = GraphStore()
+        self.triple_extractor = None  # created after LLM is ready
         
         # Vector retrieval components
-        if VECTOR_AVAILABLE:
+        self.embedder = None
+        self.faiss_index = None
+        self.embeddings_matrix = None  # normalized float32 matrix [n_chunks, dim]
+        self.indexed_chunks = []
+        self._vector_backend = "none"  # 'faiss' | 'bruteforce' | 'none'
+
+        if EMBEDDINGS_AVAILABLE:
             self.embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-            self.faiss_index = None
-            self.indexed_chunks = []
         
         # LLM
         self.llm = llm if llm else self._load_llm()
+        # Graph triple extraction can be expensive if LLM-backed; default to OFF.
+        if enable_graph_llm_extraction is None:
+            enable_graph_llm_extraction = os.getenv("ENABLE_GRAPH_LLM_EXTRACTION", "0") == "1"
+        self.triple_extractor = TripleExtractor(llm=self.llm if enable_graph_llm_extraction else None)
         
         logger.info(f"Initializing Vector RAG System with policies from: {self.text_dir}")
     
@@ -107,12 +135,19 @@ class IntelligentRAGSystem:
     def _save_index(self, cache_dir: Path):
         """Save FAISS index and chunks to disk"""
         cache_dir.mkdir(exist_ok=True)
-        faiss.write_index(self.faiss_index, str(cache_dir / "faiss.index"))
+        # Save vector index only if available
+        if FAISS_AVAILABLE and self.faiss_index is not None:
+            faiss.write_index(self.faiss_index, str(cache_dir / "faiss.index"))
+        # Save embeddings matrix (for brute-force fallback without FAISS)
+        if self.embeddings_matrix is not None:
+            np.save(str(cache_dir / "embeddings.npy"), self.embeddings_matrix)
         with open(cache_dir / "chunks.pkl", "wb") as f:
             pickle.dump({
                 "chunks": self.document_chunks,
                 "documents": self.documents,
                 "profiles": self.document_profiles,
+                "graph": self.graph_store.to_dict(),
+                "vector_backend": self._vector_backend,
                 "hash": self._get_files_hash()
             }, f)
         print(f"✅ Index cached to disk ({len(self.document_chunks)} chunks)")
@@ -121,7 +156,9 @@ class IntelligentRAGSystem:
         """Load FAISS index and chunks from disk"""
         index_path = cache_dir / "faiss.index"
         chunks_path = cache_dir / "chunks.pkl"
-        if not index_path.exists() or not chunks_path.exists():
+        embeddings_path = cache_dir / "embeddings.npy"
+        # If vectors aren't available, we can still load the chunk+graph cache.
+        if not chunks_path.exists():
             return False
         try:
             with open(chunks_path, "rb") as f:
@@ -132,10 +169,58 @@ class IntelligentRAGSystem:
                 self.document_chunks = data["chunks"]
                 self.documents = data["documents"]
                 self.document_profiles = data["profiles"]
+                self._vector_backend = data.get("vector_backend", "none")
+                # Backward compatible: older cache won't have a graph
+                graph_data = data.get("graph")
+                if isinstance(graph_data, dict) and graph_data.get("triples"):
+                    self.graph_store = GraphStore.from_dict(graph_data)
+                else:
+                    # Rebuild graph locally from cached chunks (no LLM calls)
+                    self.graph_store = GraphStore()
+                    for i, ch in enumerate(self.document_chunks):
+                        try:
+                            filename = ch.get("filename", "Document")
+                            content = ch.get("content", "")
+                            profile = ch.get("profile")
+                            doc_hint = profile.get("topic") if isinstance(profile, dict) else None
+                            chunk_id = f"{filename}:{i}"
+                            triples = self.triple_extractor.extract_triples_fallback_only(
+                                chunk_text=content,
+                                filename=filename,
+                                chunk_id=chunk_id,
+                                doc_hint=doc_hint,
+                            )
+                            self.graph_store.add_triples(triples)
+                        except Exception:
+                            pass
+                    # Best-effort: persist the rebuilt graph back to cache
+                    try:
+                        self._save_index(cache_dir)
+                    except Exception:
+                        pass
                 self.indexed_chunks = self.document_chunks
-                self.faiss_index = faiss.read_index(str(index_path))
-                self.indexed_chunks = self.document_chunks
-                print(f"✅ Index loaded from cache ({len(self.document_chunks)} chunks) - startup instant")
+
+                # Load FAISS if available
+                if FAISS_AVAILABLE and index_path.exists():
+                    self.faiss_index = faiss.read_index(str(index_path))
+                    self.indexed_chunks = self.document_chunks
+                    self._vector_backend = "faiss"
+                    print(f"✅ Index loaded from cache ({len(self.document_chunks)} chunks) - startup instant")
+                else:
+                    self.faiss_index = None
+                    # Load embeddings for brute-force cosine similarity if available
+                    if embeddings_path.exists():
+                        try:
+                            self.embeddings_matrix = np.load(str(embeddings_path))
+                            self._vector_backend = "bruteforce"
+                        except Exception:
+                            self.embeddings_matrix = None
+                            self._vector_backend = "none"
+                    else:
+                        self.embeddings_matrix = None
+                        self._vector_backend = "none"
+
+                    print(f"✅ Cache loaded ({len(self.document_chunks)} chunks) - vector backend: {self._vector_backend}")
                 return True
         except Exception as e:
             print(f"⚠️ Cache load failed: {e}, rebuilding...")
@@ -151,6 +236,13 @@ class IntelligentRAGSystem:
         # Try to load from cache first
         cache_dir = Path(__file__).resolve().parent / "vector_cache"
         if self._load_index(cache_dir):
+            # If embeddings are available but the cache was built without a vector backend,
+            # build it now from cached chunks (fast path; no re-chunking).
+            if EMBEDDINGS_AVAILABLE and self._vector_backend == "none" and self.document_chunks:
+                try:
+                    self._build_vector_index()
+                except Exception:
+                    pass
             return  # loaded from cache, skip everything else
         
         txt_files = list(self.text_dir.glob("*.txt"))
@@ -161,6 +253,7 @@ class IntelligentRAGSystem:
         self.document_chunks = []
         self.documents = []
         self.document_profiles = {}
+        self.graph_store = GraphStore()
         
         for txt_path in txt_files:
             try:
@@ -177,12 +270,30 @@ class IntelligentRAGSystem:
                     profile = await self._profile_document(useful_chunks)
                     original_name = txt_path.stem + ".pdf"
                     
-                    for chunk in useful_chunks:
+                    for idx, chunk in enumerate(useful_chunks):
                         self.document_chunks.append({
                             "filename": original_name,
                             "content": chunk,
                             "profile": profile
                         })
+
+                        # Build graph triples per chunk (GraphRAG)
+                        try:
+                            chunk_id = f"{original_name}:{idx}"
+                            doc_hint = None
+                            if isinstance(profile, dict):
+                                doc_hint = profile.get("topic") or profile.get("type")
+                            triples = await self.triple_extractor.extract_triples(
+                                chunk_text=chunk,
+                                filename=original_name,
+                                chunk_id=chunk_id,
+                                doc_hint=doc_hint,
+                                max_triples=8,
+                            )
+                            self.graph_store.add_triples(triples)
+                        except Exception:
+                            # Graph extraction is best-effort; never break ingestion
+                            pass
                     
                     self.documents.append({
                         "filename": original_name,
@@ -198,35 +309,42 @@ class IntelligentRAGSystem:
         
         logger.info(f"Successfully loaded {len(self.documents)} documents with {len(self.document_chunks)} total chunks")
         
-        # Build vector index after all documents loaded
-        if VECTOR_AVAILABLE:
+        # Build semantic index after all documents loaded
+        if EMBEDDINGS_AVAILABLE:
             self._build_vector_index()
     
     def _build_vector_index(self):
-        """Build FAISS vector index for semantic search"""
-        if not VECTOR_AVAILABLE:
-            print("❌ Vector components not available")
+        """Build a semantic retrieval index (FAISS if available, else brute-force cosine)"""
+        if not EMBEDDINGS_AVAILABLE or self.embedder is None:
+            print("❌ Embeddings not available")
             return
         
         if not self.document_chunks:
             print("❌ No chunks to index")
             return
         
-        print(f"Building vector index for {len(self.document_chunks)} chunks...")
+        print(f"Building semantic index for {len(self.document_chunks)} chunks...")
         texts = [chunk["content"] for chunk in self.document_chunks]
         
         # Generate embeddings
         embeddings = self.embedder.encode(texts, show_progress_bar=True)
         embeddings = np.array(embeddings).astype('float32')
         faiss.normalize_L2(embeddings)
-        
-        # Build FAISS index
-        dim = embeddings.shape[1]
-        self.faiss_index = faiss.IndexFlatIP(dim)
-        self.faiss_index.add(embeddings)
+
+        # Build FAISS index if available; otherwise keep embeddings for brute-force
         self.indexed_chunks = self.document_chunks
-        
-        print(f"✅ Vector index ready: {len(texts)} chunks indexed")
+        self.embeddings_matrix = embeddings
+
+        if FAISS_AVAILABLE:
+            dim = embeddings.shape[1]
+            self.faiss_index = faiss.IndexFlatIP(dim)
+            self.faiss_index.add(embeddings)
+            self._vector_backend = "faiss"
+            print(f"✅ FAISS index ready: {len(texts)} chunks indexed")
+        else:
+            self.faiss_index = None
+            self._vector_backend = "bruteforce"
+            print(f"✅ Embedding matrix ready (no FAISS): {len(texts)} chunks indexed")
         
         # Save to cache
         cache_dir = Path(__file__).parent / "vector_cache"
@@ -258,7 +376,7 @@ class IntelligentRAGSystem:
             logger.error(f"Error processing PDF {pdf_path.name}: {e}")
             return self._create_sample_content(pdf_path.name)
     
-    def _create_chunks(self, content: str, chunk_size: int = 300, overlap: int = 50) -> List[str]:
+    def _create_chunks(self, content: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
         """Create overlapping chunks"""
         if len(content) <= chunk_size:
             return [content]
@@ -290,37 +408,19 @@ class IntelligentRAGSystem:
         return chunks
     
     async def _filter_useful_chunks(self, chunks: List[str]) -> List[str]:
-        """Optimized chunk quality filter with minimal API calls"""
+        """Optimized chunk quality filter without strict keyword constraints"""
         useful_chunks = []
         
         for chunk in chunks:
-            # Skip obvious non-content without API calls
-            if len(chunk.strip()) < 30:
+            if len(chunk.strip()) < 50:
                 continue
                 
-            # Skip obvious non-content patterns
             skip_patterns = ['table des matières', 'sommaire', 'page', 'www.', 'http', '@', '://']
             if any(pattern in chunk.lower() for pattern in skip_patterns):
                 continue
             
-            # Keep chunks with banking keywords (no API call needed)
-            banking_keywords = ['crédit', 'taux', 'banque', 'compte', 'prêt', 'montant', 'durée', 'conditions', 'documents', 'virement', 'carte', 'dinars', 'da', 'tarifs']
-            if any(keyword in chunk.lower() for keyword in banking_keywords):
-                useful_chunks.append(chunk)
-                continue
-            
-            # For other chunks, be very selective to minimize API calls
-            # Only check chunks that are longer and might contain useful info
-            if len(chunk) > 100 and any(word in chunk.lower() for word in ['client', 'service', 'opération', 'frais']):
-                try:
-                    # Use a much simpler check
-                    is_useful = await self._is_useful_chunk_simple(chunk)
-                    if is_useful:
-                        useful_chunks.append(chunk)
-                except Exception as e:
-                    # If API fails, be conservative and keep longer chunks
-                    if len(chunk) > 150:
-                        useful_chunks.append(chunk)
+            # Keep the chunk. The vector search will filter semantically.
+            useful_chunks.append(chunk)
         
         logger.info(f"Filtered {len(chunks)} chunks to {len(useful_chunks)} useful chunks")
         return useful_chunks
@@ -390,6 +490,13 @@ Answer only: YES (keep) or NO (discard)"""
         sample_text = " ".join(chunks[:2]).lower()
         
         # Detect document type based on content
+        if 'notice d’information' in sample_text or 'notice d\'information' in sample_text or 'opv' in sample_text or 'prospectus' in sample_text:
+            return {
+                "topic": "Information financière",
+                "type": "financial_report",
+                "key_themes": ["notice", "information", "opv", "financier"],
+                "language": "French"
+            }
         if 'tarif' in sample_text or 'dinars' in sample_text or 'da' in sample_text:
             return {
                 "topic": "Tarifs bancaires",
@@ -419,95 +526,457 @@ Answer only: YES (keep) or NO (discard)"""
                 "language": "French"
             }
     
+    def _looks_like_english(self, text: str) -> bool:
+        tokens = set(re.findall(r"\w{3,}", text.lower()))
+        english_markers = {
+            "the", "and", "loan", "account", "rate", "interest", "mortgage",
+            "salary", "credit", "eligibility", "what", "how", "my", "is", "do"
+        }
+        return len(tokens & english_markers) >= 2
+
+    def _extract_search_keywords(self, text: str) -> str:
+        tokens = re.findall(r"\w{3,}", text.lower())
+        stopwords = {
+            "the", "and", "for", "with", "that", "this", "from", "have",
+            "your", "are", "about", "question", "please", "would", "should",
+            "does", "can", "could", "will", "may", "know", "tell", "just"
+        }
+        keywords = [t for t in tokens if t not in stopwords]
+        return " ".join(keywords[:20]) if keywords else " ".join(tokens[:20])
+
+    def _translate_query_to_french(self, question: str) -> str:
+        try:
+            from deep_translator import GoogleTranslator
+            return GoogleTranslator(source="en", target="fr").translate(question)
+        except Exception:
+            return question
+
+    def _prepare_search_query(self, question: str) -> str:
+        text = question.strip()
+        if self._looks_like_english(text):
+            text = self._translate_query_to_french(text)
+        return self._extract_search_keywords(text)
+
     async def ask_question(self, question: str) -> Dict[str, Any]:
         try:
             question = question.encode('utf-8', errors='ignore').decode('utf-8')
-                
-            if not self.faiss_index:
-                return {
-                    "answer": "Base de connaissances non chargée.",
-                    "sources": [], "confidence": 0.0, "documents_found": 0
-                }
-        
-            # Embed the question and search
-            query_embedding = self.embedder.encode([question])
-            query_embedding = np.array(query_embedding).astype('float32')
-            faiss.normalize_L2(query_embedding)
-            
-            scores, indices = self.faiss_index.search(query_embedding, k=8)
-            
-            # Collect top chunks above similarity threshold
+            search_query = self._prepare_search_query(question)
+
+            # -------- Retrieval --------
+            use_embeddings = bool(EMBEDDINGS_AVAILABLE and getattr(self, "embedder", None) is not None)
             top_chunks = []
-            seen_content = set()
-            for score, idx in zip(scores[0], indices[0]):
-                if score < 0.3:
-                    continue
-                chunk = self.indexed_chunks[idx]
-                key = chunk["content"][:80]
-                if key not in seen_content:
-                    seen_content.add(key)
-                    top_chunks.append(chunk)
+            evidence_chunks = []
+            selected_candidates = []
+            confidence_score = 0.25
+            normalized_question = unicodedata.normalize("NFKD", search_query).encode("ascii", "ignore").decode("ascii")
+            query_tokens = set(re.findall(r"\w{3,}", search_query.lower()))
+            query_tokens |= set(re.findall(r"\w{3,}", normalized_question.lower()))
+
+            def _not_found_response(answer: str = "Je n'ai pas trouve d'information sur ce sujet dans notre base de connaissances.") -> Dict[str, Any]:
+                return {
+                    "answer": answer,
+                    "sources": [],
+                    "confidence": 0.0,
+                    "documents_found": 0,
+                    "retrieved_chunks": [],
+                    "graph_facts_count": 0,
+                    "vector_backend": getattr(self, "_vector_backend", "none"),
+                    "search_query": search_query,
+                }
+
+            def _doc_type(ch: Dict[str, Any]) -> str:
+                prof = ch.get("profile")
+                if isinstance(prof, dict):
+                    return (prof.get("type") or "").lower()
+                return ""
+
+            if use_embeddings and (self.faiss_index is not None or self.embeddings_matrix is not None):
+                # Embed the search query, not the full original question
+                query_embedding = self.embedder.encode([search_query])
+                query_embedding = np.array(query_embedding).astype('float32')
+                if FAISS_AVAILABLE:
+                    faiss.normalize_L2(query_embedding)
+                else:
+                    # Normalize manually if FAISS is unavailable
+                    qn = np.linalg.norm(query_embedding, axis=1, keepdims=True) + 1e-12
+                    query_embedding = query_embedding / qn
+
+                # Phase 1: semantic search (FAISS if available; else brute-force cosine)
+                if self.faiss_index is not None:
+                    # IMPORTANT: use a larger k so keyword re-ranking can recover the
+                    # correct chunk even if it's not in the very top semantic hits.
+                    scores, indices = self.faiss_index.search(query_embedding, k=200)
+                    semantic_scores = scores[0].tolist()
+                    semantic_indices = indices[0].tolist()
+                    self._vector_backend = "faiss"
+                else:
+                    # Cosine similarity via dot product because both are L2-normalized
+                    sims = (self.embeddings_matrix @ query_embedding[0]).astype("float32")
+                    k = min(200, int(sims.shape[0]))
+                    top_idx = np.argpartition(-sims, k - 1)[:k]
+                    top_idx = top_idx[np.argsort(-sims[top_idx])]
+                    semantic_indices = top_idx.tolist()
+                    semantic_scores = sims[top_idx].tolist()
+                    self._vector_backend = "bruteforce"
+
+                confidence_score = float(semantic_scores[0]) if semantic_scores else 0.25
+
+                # Collect candidate chunks (no score threshold — trust re-ranking)
+                candidates = []
+                seen_content = set()
+                for score, idx in zip(semantic_scores, semantic_indices):
+                    chunk = self.indexed_chunks[idx]
+                    key = chunk["content"][:80]
+                    if key not in seen_content:
+                        seen_content.add(key)
+                        candidates.append({"chunk": chunk, "semantic_score": float(score)})
+
+                # Add lexical candidates as a safety net (fast on small corpora).
+                # This helps when semantic embeddings miss table-like or OCR-ish chunks.
+                if query_tokens:
+                    lexical_scored = []
+                    for ch in self.document_chunks:
+                        txt = (ch.get("content") or "").lower()
+                        hits = sum(1 for t in query_tokens if t in txt)
+                        if hits > 0:
+                            lexical_scored.append((hits, ch))
+                    lexical_scored.sort(key=lambda x: x[0], reverse=True)
+                    for hits, ch in lexical_scored[:50]:
+                        key = (ch.get("content") or "")[:80]
+                        if key not in seen_content:
+                            seen_content.add(key)
+                            # semantic_score=0.0 so lexical relies on keyword boost below
+                            candidates.append({"chunk": ch, "semantic_score": 0.0})
+
+                # Phase 2: keyword re-ranking (local)
+
+                # Light topic prior using the existing document profile (not filename-based).
+                wants_tariffs = any(t in query_tokens for t in ["tarif", "tarifs", "frais", "commission", "abonnement", "coût", "cout"])
+                wants_rates = any(t in query_tokens for t in ["taux", "intérêt", "interet", "%", "teg"])
+                wants_credit = any(t in query_tokens for t in ["crédit", "credit", "prêt", "pret", "immobilier", "financement"])
+
+                for cand in candidates:
+                    text_lower = cand["chunk"]["content"].lower()
+                    keyword_hits = sum(1 for t in query_tokens if t in text_lower)
+                    cand["keyword_hits"] = keyword_hits
+                    normalized_text = unicodedata.normalize("NFKD", text_lower).encode("ascii", "ignore").decode("ascii")
+                    normalized_words = re.findall(r"\w{3,}", normalized_question.lower())
+                    phrase_boost = 0.0
+                    for phrase_len in (4, 3, 2):
+                        for start in range(0, max(0, len(normalized_words) - phrase_len + 1)):
+                            phrase = " ".join(normalized_words[start:start + phrase_len])
+                            if len(phrase) >= 8 and phrase in normalized_text:
+                                phrase_boost = max(phrase_boost, 0.35 if phrase_len >= 3 else 0.20)
+                    cand["phrase_boost"] = phrase_boost
+
+                    topic_boost = 0.0
+                    profile = cand["chunk"].get("profile")
+                    if isinstance(profile, dict):
+                        doc_type = (profile.get("type") or "").lower()
+                        if wants_tariffs and doc_type in {"tariff_table"}:
+                            topic_boost += 0.25
+                        if wants_credit and doc_type in {"product_sheet"}:
+                            topic_boost += 0.20
+                        if wants_rates and doc_type in {"legal_text", "tariff_table"}:
+                            topic_boost += 0.15
+                        # Penalize financial reports / notices for client tariff Qs
+                        if wants_tariffs and doc_type in {"financial_report"}:
+                            topic_boost -= 0.35
+                    # Fallback penalty even if profiling cache is old
+                    if wants_tariffs:
+                        if "notice d’information" in text_lower or "notice d'information" in text_lower or "opv" in text_lower:
+                            topic_boost -= 0.35
+
+                    cand["hybrid_score"] = cand["semantic_score"] + topic_boost + phrase_boost + (keyword_hits * 0.18)
+
+                candidates.sort(key=lambda c: c["hybrid_score"], reverse=True)
+
+                if not candidates:
+                    return _not_found_response()
+
+                best_hybrid = float(candidates[0].get("hybrid_score", 0.0))
+                best_semantic = float(candidates[0].get("semantic_score", 0.0))
+                best_keyword_hits = int(candidates[0].get("keyword_hits", 0))
+                domain_tokens = {
+                    "banque", "bna", "compte", "comptes", "cheque", "chã¨que",
+                    "carte", "cib", "credit", "crã©dit", "pret", "prãªt",
+                    "frais", "tarif", "tarifs", "commission", "virement",
+                    "retrait", "versement", "taux", "interet", "intã©rãªt",
+                    "epargne", "ã©pargne", "dinar", "dinars", "da", "dzd",
+                    "leasing", "teg", "agence", "sogecash", "financement",
+                    "immobilier", "dossier", "documents", "historique",
+                    "encaissement", "decouvert", "dã©couvert",
+                    "smig", "salaire", "salariale", "formation", "apprentissage", "stage", "stagiaire",
+                    "taxe", "impot", "fiscal",
+                }
+                domain_tokens |= {
+                    "cheque", "credit", "pret", "interet", "epargne",
+                    "decouvert", "banque", "bancaire", "bna", "compte",
+                    "smig", "salaire", "formation", "apprentissage",
+                }
+                has_domain_signal = bool(query_tokens & domain_tokens)
+
+                # FAISS always returns neighbors, even for unrelated questions.
+                # This gate keeps very weak matches out of the final context.
+                if best_semantic < 0.26 and best_keyword_hits == 0 and not has_domain_signal:
+                    return _not_found_response()
+
+                score_floor = best_hybrid - 0.25
+                candidates = [
+                    c for c in candidates
+                    if float(c.get("hybrid_score", 0.0)) >= score_floor
+                    or int(c.get("keyword_hits", 0)) >= 2
+                ]
+
+                # --- Intent → doc-type filtering (precision boost) ---
+                preferred_types = None
+                if wants_tariffs:
+                    preferred_types = {"tariff_table"}
+                elif wants_credit:
+                    preferred_types = {"product_sheet"}
+                elif wants_rates:
+                    preferred_types = {"legal_text", "tariff_table"}
+
+                if preferred_types:
+                    preferred = [c for c in candidates if _doc_type(c["chunk"]) in preferred_types]
+                    non_preferred = [c for c in candidates if _doc_type(c["chunk"]) not in preferred_types]
+
+                    # Keep topic focus, but allow supporting chunks back in so
+                    # strong answers do not lose the only explicit evidence.
+                    selected_candidates = (preferred[:3] + non_preferred[:2])[:5]
+                else:
+                    selected_candidates = candidates[:5]
+
+                top_chunks = [c["chunk"] for c in selected_candidates]
+                evidence_chunks = [c["chunk"] for c in selected_candidates[:3]]
+            else:
+                # Fallback: keyword-only retrieval if vectors aren't available.
+                if not self.document_chunks:
+                    return {
+                        "answer": "Base de connaissances non chargée.",
+                        "sources": [], "confidence": 0.0, "documents_found": 0,
+                        "retrieved_chunks": []
+                    }
+
+                query_tokens = set(re.findall(r"\w{3,}", question.lower()))
+                wants_tariffs = any(t in query_tokens for t in ["tarif", "tarifs", "frais", "commission", "abonnement", "coût", "cout"])
+                wants_rates = any(t in query_tokens for t in ["taux", "intérêt", "interet", "%", "teg"])
+                wants_credit = any(t in query_tokens for t in ["crédit", "credit", "prêt", "pret", "immobilier", "financement"])
+
+                preferred_types = None
+                if wants_tariffs:
+                    preferred_types = {"tariff_table"}
+                elif wants_credit:
+                    preferred_types = {"product_sheet"}
+                elif wants_rates:
+                    preferred_types = {"legal_text", "tariff_table"}
+
+                scored = []
+                for ch in self.document_chunks:
+                    if preferred_types:
+                        prof = ch.get("profile")
+                        doc_type = (prof.get("type") or "").lower() if isinstance(prof, dict) else ""
+                        if doc_type and doc_type not in preferred_types:
+                            continue
+                    text_lower = (ch.get("content") or "").lower()
+                    hits = sum(1 for t in query_tokens if t in text_lower)
+                    if hits > 0:
+                        scored.append((hits, ch))
+
+                scored.sort(key=lambda x: x[0], reverse=True)
+                top_chunks = [ch for _, ch in scored[:5]] if scored else self.document_chunks[:5]
+                selected_candidates = [
+                    {"chunk": ch, "keyword_hits": hits, "hybrid_score": float(hits), "semantic_score": 0.0}
+                    for hits, ch in scored[:5]
+                ]
+                evidence_chunks = top_chunks[:3]
+                confidence_score = 0.25 if scored else 0.15
             
             if not top_chunks:
                 return {
                     "answer": "Je n'ai pas trouvé d'information sur ce sujet dans notre base de connaissances.",
-                    "sources": [], "confidence": 0.0, "documents_found": 0
+                    "sources": [], "confidence": 0.0, "documents_found": 0,
+                    "retrieved_chunks": [],
+                    "vector_backend": getattr(self, "_vector_backend", "none"),
                 }
             
-            # Build context
-            context = "\n\n".join([
+            if not evidence_chunks:
+                evidence_chunks = top_chunks[:3]
+
+            # --- GraphRAG: pull structured facts from the local knowledge graph ---
+            graph_triples: List[GraphTriple] = []
+            try:
+                selected_filenames = {c.get("filename") for c in top_chunks if c.get("filename")}
+                selected_snippets = [
+                    re.sub(r"\s+", " ", (c.get("content") or "")).strip()[:180]
+                    for c in top_chunks
+                ]
+                seeds = self.graph_store.find_seed_entities(search_query, limit=30)
+                raw_triples = self.graph_store.neighborhood_triples(
+                    seeds, hops=1, max_triples=30, min_confidence=0.45
+                )
+
+                # Filter graph facts aggressively: keep only facts likely relevant to the question.
+                allowed_predicates = {"HAS_AMOUNT", "HAS_RATE", "HAS_DURATION", "HAS_LIMIT", "HAS_FEE", "REQUIRES"}
+                asks_requirements = any(t in query_tokens for t in ["document", "documents", "requis", "requises", "condition", "conditions", "dossier", "eligibilit"])
+
+                filtered = []
+                for t in raw_triples:
+                    if t.predicate not in allowed_predicates:
+                        continue
+                    if t.predicate == "REQUIRES" and not asks_requirements:
+                        continue
+                    if t.evidence and selected_filenames and t.evidence.filename not in selected_filenames:
+                        continue
+                    if t.evidence and selected_snippets:
+                        ev_snippet = re.sub(r"\s+", " ", (t.evidence.snippet or "")).strip()
+                        if ev_snippet and not any(ev_snippet[:80] in snippet or snippet[:80] in ev_snippet for snippet in selected_snippets):
+                            continue
+                    s = (t.subject or "").lower()
+                    o = (t.object or "").lower()
+                    if any(tok in s or tok in o for tok in query_tokens):
+                        filtered.append(t)
+
+                # If nothing matches tokens, prefer numeric facts from selected evidence only.
+                if not filtered:
+                    filtered = [
+                        t for t in raw_triples
+                        if t.predicate in {"HAS_RATE", "HAS_AMOUNT", "HAS_DURATION", "HAS_FEE", "HAS_LIMIT"}
+                        and (not t.evidence or not selected_filenames or t.evidence.filename in selected_filenames)
+                    ]
+
+                graph_triples = filtered[:8]
+            except Exception:
+                graph_triples = []
+
+            graph_facts = ""
+            if graph_triples:
+                graph_facts = "\n".join(
+                    [
+                        f"- {t.subject} | {t.predicate} | {t.object}"
+                        for t in graph_triples
+                    ]
+                )
+
+            # Build context (chunks)
+            chunk_context = "\n\n".join([
                 f"[{c['filename']}]:\n{c['content']}" for c in top_chunks
             ])
+            # Combine context (graph facts + chunks)
+            context = (
+                (f"FAITS (graphe):\n{graph_facts}\n\n" if graph_facts else "")
+                + f"EXTRAITS (documents):\n{chunk_context}"
+            )
             
-            # Single LLM call: synthesize answer
-            prompt = f"""Tu es un assistant bancaire algérien expert. Tu connais parfaitement les politiques et produits de la BNA.
+            # Improved prompt: force the LLM to use the context
+            prompt = f"""Tu es un assistant bancaire algérien expert de la BNA (Banque Nationale d'Algérie).
 
-Question: "{question}"
+Question du client: "{question}"
 
-Documents disponibles:
+Contexte extrait de nos documents officiels:
 {context}
 
-Règles STRICTES:
-- Réponds en français professionnel et clair
-- Utilise UNIQUEMENT les informations des documents fournis
-- Si la réponse est dans les documents: réponds directement en 2-5 phrases
-- Si la question est ambiguë et plusieurs réponses sont possibles selon un contexte manquant: commence par CLARIFICATION: et pose une seule question avec les options disponibles basées sur les documents
-- Si les documents ne contiennent pas la réponse: réponds exactement AUCUNE_INFO
-- Ne mentionne jamais les noms de fichiers
+Instructions:
+- Réponds en français professionnel et clair, en 2-5 phrases maximum.
+- Base ta réponse UNIQUEMENT sur le contexte ci-dessus (FAITS + EXTRAITS).
+- Reformule et synthétise le contenu plutôt que de reprendre mot à mot des passages longs.
+- Ne cite pas ou ne recopie pas de longs extraits juridiques. Explique plutôt la règle ou le calcul en termes simples.
+- Si le contexte contient une règle de type "applicable si...", présente-la comme un résumé de la règle.
+- Si une situation client est décrite, compare-la à la règle et dis si elle est couverte ou non par la règle trouvée.
+- Si la question concerne un salaire ou un taux, traite cela comme une question de taux et réponde avec la logique de calcul appropriée, même si la KB ne donne pas un taux exact.
+- Si une réponse est clairement présente dans au moins un extrait, réponds directement en la résumant.
+- Si une valeur numérique exacte n'apparaît pas dans les FAITS ou EXTRAITS, ne donne aucune valeur numérique.
+- Si le contexte ne contient pas la réponse exacte, dis-le clairement et demande une précision (ou indique où vérifier).
+- Ne mentionne jamais les noms de fichiers.
+- Si la question est ambiguë et que le contexte propose plusieurs options, commence par CLARIFICATION: et liste les options.
 
 Réponse:"""
         
             response = await self.llm.ainvoke(prompt)
             answer = response.content.strip()
+
+            # Prefer explicit numeric rates found in graph facts or evidence chunks.
+            # Sometimes the LLM can mis-summarize numeric relations (e.g. rendering "3 fois" as "3 * 100 = 300 %").
+            # If the retrieved context contains an explicit percentage, return that authoritative value instead.
+            try:
+                explicit_rates = []
+                # Check graph facts first for structured HAS_RATE triples
+                try:
+                    for t in graph_triples:
+                        if getattr(t, 'predicate', '').upper() == 'HAS_RATE' and t.object:
+                            explicit_rates.append(str(t.object).strip())
+                except Exception:
+                    pass
+
+                # Fall back to regex search in evidence chunks
+                if not explicit_rates:
+                    rate_re = re.compile(r"(\d{1,2}(?:[.,]\d+)?\s*%)")
+                    sentence_re = re.compile(r"([^.?!]*\d{1,2}(?:[.,]\d+)?\s*%[^.?!]*)")
+                    for c in evidence_chunks:
+                        txt = (c.get('content') if isinstance(c, dict) else getattr(c, 'content', '')) or ''
+                        m = rate_re.search(txt)
+                        if m:
+                            explicit_rates.append(m.group(1).strip())
+                            s = sentence_re.search(txt)
+                            if s:
+                                explicit_sentence = s.group(1).strip()
+                                # Use the sentence as the authoritative answer when possible
+                                answer = explicit_sentence
+                                break
+
+                # If we found a rate but not an extracted sentence, set a concise authoritative answer
+                if explicit_rates and 'explicit_sentence' not in locals():
+                    answer = f"D'après nos documents officiels, le taux bonifié indiqué est {explicit_rates[0]}."
+            except Exception:
+                # Non-fatal: keep the LLM answer if post-processing fails
+                pass
             
-            if "AUCUNE_INFO" in answer:
+            # Only trigger "not found" for truly empty answers
+            not_found_phrases = ["aucune_info", "je n'ai pas trouvé", "je n'ai trouvé aucune", "pas d'information"]
+            is_not_found = any(phrase in answer.lower() for phrase in not_found_phrases)
+            
+            if is_not_found:
                 return {
                     "answer": "Je n'ai pas trouvé d'information spécifique sur ce sujet dans notre base de connaissances.",
-                    "sources": [], "confidence": 0.0, "documents_found": 0
+                    "sources": [], "confidence": 0.0, "documents_found": 0,
+                    "retrieved_chunks": evidence_chunks,
+                    "vector_backend": getattr(self, "_vector_backend", "none"),
                 }
             
             if answer.startswith("CLARIFICATION:"):
                 return {
                     "answer": answer.replace("CLARIFICATION:", "").strip(),
                     "sources": [], "confidence": 0.5,
-                    "documents_found": 0, "needs_clarification": True
+                    "documents_found": 0, "needs_clarification": True,
+                    "retrieved_chunks": evidence_chunks,
+                    "vector_backend": getattr(self, "_vector_backend", "none"),
                 }
             
-            sources = list(dict.fromkeys([c["filename"] for c in top_chunks]))
+            sources = list(dict.fromkeys([c["filename"] for c in evidence_chunks]))
+            # Add graph sources as additional evidence (still never mention filenames in the answer)
+            try:
+                for t in graph_triples:
+                    if t.evidence and t.evidence.filename and t.evidence.filename not in sources:
+                        sources.append(t.evidence.filename)
+            except Exception:
+                pass
             return {
                 "answer": answer,
                 "sources": sources,
-                "confidence": float(scores[0][0]),
+                "confidence": float(confidence_score),
                 "documents_found": len(sources),
                 "needs_clarification": False,
-                "retrieved_chunks": top_chunks  # Add retrieved chunks for evaluation
+                "retrieved_chunks": evidence_chunks,
+                "graph_facts_count": len(graph_triples),
+                "vector_backend": getattr(self, "_vector_backend", "none"),
             }
         
         except Exception as e:
             logger.error(f"Error in ask_question: {e}")
             return {
                 "answer": "Une erreur technique est survenue.",
-                "sources": [], "confidence": 0.0, "documents_found": 0
+                "sources": [], "confidence": 0.0, "documents_found": 0,
+                "vector_backend": getattr(self, "_vector_backend", "none"),
             }
     
     async def _generate_llm_answer(self, question: str, search_results: List[Dict[str, Any]]) -> str:

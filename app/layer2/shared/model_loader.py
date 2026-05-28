@@ -12,6 +12,15 @@ class settings:
 _nemotron_instance = None
 
 
+def _seems_french(text: str) -> bool:
+    lower_text = text.lower()
+    french_markers = [
+        " quel ", " quelle ", " est ", " mon ", " ma ", " mes ", " du ", " au ", " des ", " pour ", " avec ", " chez ", " mais ", " non ", " oui "
+    ]
+    matches = sum(1 for marker in french_markers if marker in lower_text)
+    return matches >= 2
+
+
 class NemotronTranslationModel:
     """
     Wrapper for Nemotron-3-Content-Safety model using NVIDIA API endpoint.
@@ -56,48 +65,62 @@ class NemotronTranslationModel:
                 max_tokens=512,
             )
 
-            # Use stronger prompt for Arabic to prevent returning original text
+            # Use a stronger, explicit translation prompt and a system role for better English output.
             if detected_language == "ar":
-                prompt = (
-                    "You are a professional banking translator specializing in "
-                    "Algerian Arabic (Darija). "
-                    
-                    "Customers speak in Algerian dialect with non-standard spellings, "
-                    "French-Arabic mixing, and informal language. "
-                    
-                    "Your job: "
-                    "1. Understand the customer's intent regardless of spelling or dialect "
-                    "2. Translate it into clean, standard English banking language "
-                    "3. If a word is unclear, infer from banking context "
-                    "4. Return ONLY the English translation, nothing else. "
-                    
-                    f"Arabic: {text}\n"
-                    "English:"
-                )
+                messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a professional banking translator specializing in Algerian Arabic (Darija). "
+                            "Customers speak in Algerian dialect with non-standard spellings, French-Arabic mixing, and informal language. "
+                            "Translate the input into clean, standard English banking language. "
+                            "Return ONLY the English translation and nothing else."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Arabic: {text}\nEnglish:"
+                    }
+                ]
             else:
-                prompt = f"Translate to English, return only the translation, nothing else:\n{text}"
-            response = client.invoke([{"role": "user", "content": prompt}])
+                messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a professional translator. Translate the following text into clear, natural English. "
+                            "Return ONLY the English translation and nothing else."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Source language: {detected_language}\nText: {text}\nEnglish:"
+                    }
+                ]
+            response = client.invoke(messages)
             translated_text = response.content.strip()
 
             logger.debug(f"[Translation] Result: {translated_text}")
+
+            # If we still see output that appears to be French, fallback to GoogleTranslator.
+            if detected_language == "fr" and _seems_french(translated_text):
+                logger.warning("[Translation] Nemotron output appears to still be French, using fallback translator")
+                raise ValueError("Nemotron output appears to still be French")
+
             return translated_text
 
         except Exception as e:
-            logger.warning(f"[Translation] NVIDIA failed: {e}. Trying fallback...")
-            try:
-                from deep_translator import GoogleTranslator
-                # Detect source language for proper translation
-                source_lang = detected_language if detected_language != "en" else "auto"
-                translated = GoogleTranslator(
-                    source=source_lang, 
-                    target="en"
-                ).translate(text)
-                logger.debug(f"[Translation] Fallback result: {translated}")
-                return translated
-            except Exception as fallback_error:
-                logger.error(f"[Translation] Fallback also failed: {fallback_error}")
-                # Check if it's a timeout/gateway error
-                if "504" in str(e) or "timeout" in str(e).lower() or "gateway" in str(e).lower():
+                logger.warning(f"[Translation] NVIDIA failed or returned non-English output: {e}. Trying fallback...")
+                try:
+                    from deep_translator import GoogleTranslator
+                    source_lang = detected_language if detected_language != "en" else "auto"
+                    translated = GoogleTranslator(
+                        source=source_lang,
+                        target="en"
+                    ).translate(text)
+                    logger.debug(f"[Translation] Fallback result: {translated}")
+                    return translated
+                except Exception as fallback_error:
+                    logger.error(f"[Translation] Fallback also failed: {fallback_error}")
                     logger.warning("[Translation] Gateway timeout - using original text without translation")
                     return text
                 else:

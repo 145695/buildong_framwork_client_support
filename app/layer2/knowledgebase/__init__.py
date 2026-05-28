@@ -19,11 +19,12 @@ Cloud Stack (Recommended):
 - Vector Store: Pinecone (hosted database)
 """
 
-from .rag_agent import KnowledgeBaseAgent
-# from .dify_integration import BankingKnowledgeBase, DifyKnowledgeBase  # Commented out - module doesn't exist
+# NOTE:
+# Keep imports lightweight here so environments missing optional deps (e.g., chromadb)
+# can still import other modules (like intelligent_rag_system) successfully.
+try:
+    from .rag_agent import KnowledgeBaseAgent  # Local RAG system (ChromaDB-based)
+except Exception:
+    KnowledgeBaseAgent = None  # type: ignore
 
-__all__ = [
-    'KnowledgeBaseAgent',      # Local RAG system
-    'BankingKnowledgeBase',    # Cloud RAG system (recommended)
-    'DifyKnowledgeBase'       # Dify integration
-]
+__all__ = ["KnowledgeBaseAgent"]

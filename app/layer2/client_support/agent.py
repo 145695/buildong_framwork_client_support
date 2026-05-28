@@ -57,12 +57,21 @@ def client_support_node(state: ConversationState) -> ConversationState:
         # Create prompt for LLaMA model
         prompt = (
             "You are a friendly BNA bank customer service agent.\n"
-            "Using information below, answer in 2-3 natural conversational sentences.\n"
-            "No bullet points, no formatting, no markdown, plain text only.\n\n"
+            "Your job is to use the knowledge base information provided to give the customer a better answer.\n"
+            "If knowledge base information is available, ground your response in it and explain how it applies to the customer's case.\n"
+            "If the KB information contains a clear rate, threshold, benefit, or policy rule, mention it directly and indicate whether the customer's situation is covered by that rule.\n"
+            "If the customer describes a personal case, compare it to the KB policy rule instead of only repeating the raw KB text.\n"
+            "Do not say the customer's information is unrelated if the KB information is present. Use the KB information or say it is insufficient only when it does not answer the question directly.\n"
+            "For example, if the KB says a rule applies to payments greater than 2 fois SMIG and the customer says their payment is 3 fois SMIG, answer that the same rule applies to their case.\n"
+            "If the question asks about salary and rate, treat it as a rate question and summarize how the KB rule calculates the applicable rate.\n"
+            "Answer in 2-3 natural conversational sentences. No bullet points, no formatting, no markdown, plain text only.\n\n"
             f"{f'Conversation so far:{chr(10)}{history_text}{chr(10)}' if history_text else ''}"
             f"Customer question: {question}\n"
             f"Intent: {intent}\n"
-            f"{context}\n\n"
+            f"Knowledge base information: {kb_result if kb_result else 'Aucun résultat de base de connaissances disponible.'}\n"
+            f"{f'Loan evaluation: {loan_result}\n' if loan_result else ''}"
+            "Use the knowledge base information above to answer clearly for the customer.\n"
+            "If the KB answer is not available, say you will help them find the right answer or direct them to the branch.\n\n"
             "Answer:"
         )
         

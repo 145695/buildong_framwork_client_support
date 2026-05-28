@@ -10,6 +10,10 @@ import logging
 
 import numpy as np
 
+RIVA_COMMAND_TIMEOUT = int(os.getenv("RIVA_COMMAND_TIMEOUT", "180"))
+RIVA_FUNCTION_ID = os.getenv("RIVA_FUNCTION_ID", "b702f636-f60c-4a3d-a6f4-f3568c13bd7d")
+RIVA_FALLBACK_FUNCTION_ID = os.getenv("RIVA_FALLBACK_FUNCTION_ID")
+
 logger = logging.getLogger(__name__)
 import soundfile as sf
 from fastapi import APIRouter, File, HTTPException, UploadFile, Form
@@ -23,6 +27,8 @@ router = APIRouter(prefix="/test", tags=["Layer Tests"])
 def validate_language(detected_language: str) -> str:
     """Validate and normalize detected language to supported languages"""
     SUPPORTED_LANGUAGES = ["ar", "fr", "en"]
+    if detected_language == "unknown":
+        return "unknown"
     if detected_language in SUPPORTED_LANGUAGES:
         return detected_language
     # Default to Arabic for unsupported languages
@@ -41,320 +47,133 @@ async def test_stt(audio: UploadFile = File(...)):
     if not ml_models.get("stt_whisper"):
         raise HTTPException(503, "Whisper not configured")
 
+    audio_bytes = await audio.read()
+
+    api_key = os.getenv("NVIDIA_API_KEY")
+    if not api_key:
+        raise HTTPException(500, "NVIDIA_API_KEY environment variable is missing.")
+
+    temp_filename = os.path.join(tempfile.gettempdir(), f"stt_temp_{hash(audio_bytes)}.wav")
+
     try:
-        audio_bytes = await audio.read()
-        
-        # Use NVIDIA Riva gRPC client for whisper-large-v3
-        api_key = os.getenv("NVIDIA_API_KEY")
-        if not api_key:
-            raise HTTPException(500, "NVIDIA_API_KEY environment variable is missing.")
-        
-        # Create a temporary file for the audio
-        temp_filename = os.path.join(tempfile.gettempdir(), f"stt_temp_{hash(audio_bytes)}.wav")
-        
+        # Write audio bytes to temporary file
+        buffer = io.BytesIO(audio_bytes)
+        audio_array, sample_rate = sf.read(buffer)
+        sf.write(temp_filename, audio_array, sample_rate, format="WAV")
+
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        riva_clients_dir = os.path.join(project_root, "python-clients")
+        if not os.path.exists(riva_clients_dir):
+            subprocess.run(["git", "clone", "https://github.com/nvidia-riva/python-clients.git", riva_clients_dir], check=True, capture_output=True)
+
+        transcribe_script = os.path.join(riva_clients_dir, "scripts", "asr", "transcribe_file_offline.py")
+        if not os.path.exists(transcribe_script):
+            raise HTTPException(500, f"Riva client script not found at {transcribe_script}")
+
+        cmd = [
+            sys.executable,
+            transcribe_script,
+            "--server", "grpc.nvcf.nvidia.com:443",
+            "--use-ssl",
+            "--metadata", "function-id", "b702f636-f60c-4a3d-a6f4-f3568c13bd7d",
+            "--metadata", "authorization", f"Bearer {api_key}",
+            "--language-code", "multi",
+            "--input-file", temp_filename
+        ]
+
+        env = os.environ.copy()
+        env['PYTHONHASHSEED'] = 'random'
+        env['PYTHONIOENCODING'] = 'utf-8'
+
         try:
-            # Write audio bytes to temporary file
-            buffer = io.BytesIO(audio_bytes)
-            audio_array, sample_rate = sf.read(buffer)
-            sf.write(temp_filename, audio_array, sample_rate, format="WAV")
-            
-            print(f"Audio file written: {temp_filename}, sample_rate: {sample_rate}")
-            print(f"Sending request to NVIDIA Riva gRPC API")
-            
-            # Clone Riva Python clients if not already present
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            riva_clients_dir = os.path.join(project_root, "python-clients")
-            if not os.path.exists(riva_clients_dir):
-                print(f"Cloning NVIDIA Riva Python clients to {riva_clients_dir}")
-                subprocess.run(
-                    ["git", "clone", "https://github.com/nvidia-riva/python-clients.git", riva_clients_dir],
-                    check=True, capture_output=True
-                )
-            
-            # Path to the transcribe script
-            transcribe_script = os.path.join(riva_clients_dir, "scripts", "asr", "transcribe_file_offline.py")
-            
-            if not os.path.exists(transcribe_script):
-                raise HTTPException(500, f"Riva client script not found at {transcribe_script}")
-            
-            # Build command for NVIDIA Riva client
-            cmd = [
-                sys.executable,
-                transcribe_script,
-                "--server", "grpc.nvcf.nvidia.com:443",
-                "--use-ssl",
-                "--metadata", "function-id", "b702f636-f60c-4a3d-a6f4-f3568c13bd7d",
-                "--metadata", "authorization", f"Bearer {api_key}",
-                "--language-code", "multi",  # Auto language detection
-                "--input-file", temp_filename
-            ]
-            
-            print(f"Running command: {' '.join(cmd)}")
-            
-            # Set environment variables for subprocess
-            env = os.environ.copy()
-            env['PYTHONHASHSEED'] = 'random'
-            env['PYTHONIOENCODING'] = 'utf-8'
-            
-            # Run the command with UTF-8 encoding
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env, encoding='utf-8', errors='replace')
-            
-            if result.returncode != 0:
-                print(f"Riva client error: {result.stderr}")
-                raise HTTPException(500, f"Riva client failed: {result.stderr}")
-            
-            print(f"Riva client output: {result.stdout}")
-            
-            # Parse the JSON output from Riva client
-            # The output contains JSON followed by "Final transcript: <text>"
-            # We need to extract the JSON to get language and transcript
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=RIVA_COMMAND_TIMEOUT, env=env, encoding='utf-8', errors='replace')
+        except subprocess.TimeoutExpired as timeout_exc:
+            # Log any partial output
+            stdout = getattr(timeout_exc, 'stdout', '') or ''
+            stderr = getattr(timeout_exc, 'stderr', '') or ''
+            logger.error("Riva STT timeout after %ss. stdout: %s stderr: %s", RIVA_COMMAND_TIMEOUT, stdout[:200], stderr[:400])
+            raise HTTPException(504, f"NVIDIA Riva STT command timed out after {RIVA_COMMAND_TIMEOUT} seconds") from timeout_exc
+
+        if result.returncode != 0:
+            logger.error("Riva client error: %s", result.stderr)
+            raise HTTPException(500, f"Riva client failed: {result.stderr}")
+
+        output = result.stdout.strip()
+        # Extract JSON then transcript
+        json_start = output.find('{')
+        json_end = output.rfind('}') + 1
+        if json_start != -1 and json_end > json_start:
             try:
-                # Find the JSON object (it starts with { and ends with })
-                output = result.stdout.strip()
-                
-                # Try to find where JSON ends and "Final transcript" begins
-                json_start = output.find('{')
-                json_end = output.rfind('}') + 1
-                
-                if json_start != -1 and json_end > json_start:
-                    json_str = output[json_start:json_end]
-                    json_output = json.loads(json_str)
-                    
-                    if json_output and 'results' in json_output:
-                        # Extract transcript and language from JSON
-                        result_data = json_output['results'][0]
-                        alternatives = result_data['alternatives'][0]
-                        transcription = alternatives['transcript']
-                        language_codes = alternatives.get('languageCode', [])
-                        detected_language = language_codes[0] if language_codes else "unknown"
-                        
-                        print(f"Parsed transcription: {transcription[:100]}...")
-                        print(f"Detected language: {detected_language}")
-                    else:
-                        # Fallback to entire output
-                        transcription = output
-                        detected_language = "unknown"
-                        print(f"JSON parsing failed, using raw output")
-                else:
-                    # No JSON found, try to find "Final transcript:"
-                    if "Final transcript:" in output:
-                        transcription = output.split("Final transcript:")[-1].strip()
-                        detected_language = "unknown"
-                    else:
-                        transcription = output
-                        detected_language = "unknown"
-                        print(f"JSON parsing failed, using raw output")
-                
-            except json.JSONDecodeError as e:
-                # If JSON parsing fails, try to find "Final transcript:"
-                output = result.stdout.strip()
-                if "Final transcript:" in output:
-                    transcription = output.split("Final transcript:")[-1].strip()
-                    detected_language = "unknown"
-                    print(f"JSON parsing failed ({e}), using final transcript line")
+                json_output = json.loads(output[json_start:json_end])
+                if json_output and 'results' in json_output:
+                    result_data = json_output['results'][0]
+                    alternatives = result_data['alternatives'][0]
+                    transcription = alternatives.get('transcript', output)
+                    language_codes = alternatives.get('languageCode', [])
+                    detected_language = language_codes[0] if language_codes else 'unknown'
                 else:
                     transcription = output
-                    detected_language = "unknown"
-                    print(f"JSON parsing failed ({e}), using raw output")
-            
-            return {
-                "layer": 1,
-                "model": "whisper-large-v3-nvidia-riva",
-                "detected_language": detected_language,
-                "transcription": transcription,
-            }
-            
-        finally:
-            # Clean up temp file
-            try:
-                if os.path.exists(temp_filename):
-                    os.unlink(temp_filename)
-            except Exception as cleanup_error:
-                print(f"Warning: Could not clean up temp file {temp_filename}: {cleanup_error}")
-                
-    except Exception as e:
-        error_str = str(e)
-        print(f"NVIDIA Riva API error: {error_str}")
-        raise HTTPException(500, f"Speech-to-text failed: {error_str}")
+                    detected_language = 'unknown'
+            except json.JSONDecodeError:
+                transcription = output
+                detected_language = 'unknown'
+        else:
+            if 'Final transcript:' in output:
+                transcription = output.split('Final transcript:')[-1].strip()
+                detected_language = 'unknown'
+            else:
+                transcription = output
+                detected_language = 'unknown'
+
+        return {
+            'layer': 1,
+            'model': 'whisper-large-v3-nvidia-riva',
+            'detected_language': detected_language,
+            'transcription': transcription,
+        }
+    finally:
+        try:
+            if os.path.exists(temp_filename):
+                os.unlink(temp_filename)
+        except Exception:
+            pass
 
 
 @router.post("/voice-to-orchestrator", summary="Voice Input -> Layer 1 STT -> Translation Gate -> Layer 2 Orchestrator -> Output")
 async def voice_to_orchestrator(audio: UploadFile = File(...)):
     """
-    Complete voice pipeline: Voice input -> Layer 1 STT -> Translation Gate -> Layer 1 Ingestion -> Layer 2 Orchestrator -> Output
+    Simplified voice pipeline: reuse `test_stt` for transcription,
+    then apply translation gate, ingestion, and orchestrator routing.
     """
     from app.main import ml_models
     from app.layer1.ingestion import ingest_chat_request
     from app.layer2.orchestrator import smart_pm_routing
     from app.schemas.conversation import ChatRequest, SourceChannel
 
-    # Step 1: Load and transcribe audio using Layer 1 STT
     if not ml_models.get("stt_whisper"):
         raise HTTPException(503, "Whisper not configured")
 
-    transcription = None
-    detected_language = "unknown"
-    
-    try:
-        audio_bytes = await audio.read()
-        
-        # Use NVIDIA Riva gRPC client for whisper-large-v3
-        api_key = os.getenv("NVIDIA_API_KEY")
-        if not api_key:
-            raise HTTPException(500, "NVIDIA_API_KEY environment variable is missing.")
-        
-        # Create a temporary file for the audio
-        temp_filename = os.path.join(tempfile.gettempdir(), f"stt_temp_{hash(audio_bytes)}.wav")
-        
-        try:
-            # Write audio bytes to temporary file
-            buffer = io.BytesIO(audio_bytes)
-            audio_array, sample_rate = sf.read(buffer)
-            sf.write(temp_filename, audio_array, sample_rate, format="WAV")
-            
-            print(f"Audio file written: {temp_filename}, sample_rate: {sample_rate}")
-            print(f"Sending request to NVIDIA Riva gRPC API")
-            
-            # Clone Riva Python clients if not already present
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            riva_clients_dir = os.path.join(project_root, "python-clients")
-            if not os.path.exists(riva_clients_dir):
-                print(f"Cloning NVIDIA Riva Python clients to {riva_clients_dir}")
-                subprocess.run(
-                    ["git", "clone", "https://github.com/nvidia-riva/python-clients.git", riva_clients_dir],
-                    check=True, capture_output=True
-                )
-            
-            # Path to the transcribe script
-            transcribe_script = os.path.join(riva_clients_dir, "scripts", "asr", "transcribe_file_offline.py")
-            
-            if not os.path.exists(transcribe_script):
-                raise HTTPException(500, f"Riva client script not found at {transcribe_script}")
-            
-            # Build command for NVIDIA Riva client
-            cmd = [
-                sys.executable,
-                transcribe_script,
-                "--server", "grpc.nvcf.nvidia.com:443",
-                "--use-ssl",
-                "--metadata", "function-id", "b702f636-f60c-4a3d-a6f4-f3568c13bd7d",
-                "--metadata", "authorization", f"Bearer {api_key}",
-                "--language-code", "multi",  # Auto language detection
-                "--input-file", temp_filename
-            ]
-            
-            print(f"Running command: {' '.join(cmd)}")
-            
-            # Set environment variables for subprocess
-            env = os.environ.copy()
-            env['PYTHONHASHSEED'] = 'random'
-            env['PYTHONIOENCODING'] = 'utf-8'
-            
-            # Run the command with UTF-8 encoding
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env, encoding='utf-8', errors='replace')
-            
-            if result.returncode != 0:
-                print(f"Riva client error: {result.stderr}")
-                raise HTTPException(500, f"Riva client failed: {result.stderr}")
-            
-            print(f"Riva client output: {result.stdout}")
-            
-            # Parse the JSON output from Riva client
-            # The output contains JSON followed by "Final transcript: <text>"
-            # We need to extract the JSON to get language and transcript
-            try:
-                # Find the JSON object (it starts with { and ends with })
-                output = result.stdout.strip()
-                
-                # Try to find where JSON ends and "Final transcript" begins
-                json_start = output.find('{')
-                json_end = output.rfind('}') + 1
-                
-                if json_start != -1 and json_end > json_start:
-                    json_str = output[json_start:json_end]
-                    json_output = json.loads(json_str)
-                    
-                    if json_output and 'results' in json_output:
-                        # Extract transcript and language from JSON
-                        result_data = json_output['results'][0]
-                        alternatives = result_data['alternatives'][0]
-                        transcription = alternatives['transcript']
-                        language_codes = alternatives.get('languageCode', [])
-                        detected_language = language_codes[0] if language_codes else "unknown"
-                        
-                        print(f"Parsed transcription: {transcription[:100]}...")
-                        print(f"Detected language: {detected_language}")
-                    else:
-                        # Fallback to entire output
-                        transcription = output
-                        detected_language = "unknown"
-                        print(f"JSON parsing failed, using raw output")
-                else:
-                    # No JSON found, try to find "Final transcript:"
-                    if "Final transcript:" in output:
-                        transcription = output.split("Final transcript:")[-1].strip()
-                        detected_language = "unknown"
-                    else:
-                        transcription = output
-                        detected_language = "unknown"
-                        print(f"JSON parsing failed, using raw output")
-                
-            except json.JSONDecodeError as e:
-                # If JSON parsing fails, try to find "Final transcript:"
-                output = result.stdout.strip()
-                if "Final transcript:" in output:
-                    transcription = output.split("Final transcript:")[-1].strip()
-                    detected_language = "unknown"
-                    print(f"JSON parsing failed ({e}), using final transcript line")
-                else:
-                    transcription = output
-                    detected_language = "unknown"
-                    print(f"JSON parsing failed ({e}), using raw output")
-            
-        finally:
-            # Clean up temp file
-            try:
-                if os.path.exists(temp_filename):
-                    os.unlink(temp_filename)
-            except Exception as cleanup_error:
-                print(f"Warning: Could not clean up temp file {temp_filename}: {cleanup_error}")
-                
-    except Exception as e:
-        error_str = str(e)
-        print(f"NVIDIA Riva API error: {error_str}")
-        raise HTTPException(500, f"Speech-to-text failed: {error_str}")
+    # Delegate transcription to test_stt to keep logic centralized
+    stt_result = await test_stt(audio)
+    transcription = stt_result.get("transcription")
+    detected_language = stt_result.get("detected_language", "unknown")
 
-    # Step 2: Apply language validation
-    detected_language = validate_language(detected_language)
-    
-    # Step 3: Translation Gate - Conditional routing based on language
-    text_for_ingestion = transcription
-    translation_applied = False
-
+    # Translation gate
     if detected_language != "en" and detected_language != "unknown":
-        print(f"Detected non-English language: {detected_language}. Routing through Nemotron translation gate...")
         try:
             from app.layer2.shared.model_loader import get_nemotron_model
             nemotron = get_nemotron_model()
-            
-            # Translate and sanitize using Nemotron
             translated_text, safety_label = nemotron.translate_and_sanitize(transcription, detected_language)
-            
-            # Apply safety gate
             if safety_label == "unsafe":
-                print(f"🚫 Safety gate blocked: {safety_label}")
                 raise HTTPException(400, "Query blocked by safety filter")
-            
             text_for_ingestion = translated_text
             translation_applied = True
-            print(f"Nemotron translation applied: {transcription[:50]}... -> {translated_text[:50]}...")
-            
-        except Exception as e:
-            print(f"Nemotron translation failed: {e}. Using original transcription.")
-            # Fallback to original transcription if translation fails
+        except Exception:
             text_for_ingestion = transcription
+            translation_applied = False
     else:
-        print(f"Detected English language. Direct flow to orchestrator.")
+        text_for_ingestion = transcription
+        translation_applied = False
 
     # Step 3: Pass transcription to Layer 1 ingestion
     try:
@@ -364,39 +183,17 @@ async def voice_to_orchestrator(audio: UploadFile = File(...)):
             source_channel=SourceChannel.VOICE,
             conversation_id=None
         )
-        
         state = ingest_chat_request(chat_request)
-        
     except Exception as e:
         raise HTTPException(500, f"Layer 1 ingestion failed: {str(e)}")
 
     # Step 4: Pass to Layer 2 Orchestrator
     try:
         result_state = smart_pm_routing(state)
-        
     except Exception as e:
         raise HTTPException(500, f"Orchestrator processing failed: {str(e)}")
 
-    # Step 5: Return orchestrator output
-    return {
-        "success": True,
-        "transcription": transcription,
-        "detected_language": detected_language,
-        "translation_applied": translation_applied,
-        "text_for_ingestion": text_for_ingestion,
-        "conversation_id": str(state.conversation_id),
-        "orchestrator_output": {
-            "intent": result_state.intent,
-            "category": result_state.intent_category,
-            "confidence": result_state.orchestrator_context.get("confidence", 0.0),
-            "extraction_method": result_state.orchestrator_context.get("extraction_method", "unknown"),
-            "model_used": result_state.orchestrator_context.get("model_used", "unknown"),
-            "required_agents": result_state.required_agents,
-            "mission_briefs": result_state.mission_brief,
-            "final_response": result_state.final_response_en
-        }
-    }
-
+    return result_state
 
 class TTSRequest(BaseModel):
     text: str
@@ -758,7 +555,7 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
                 transcribe_script,
                 "--server", "grpc.nvcf.nvidia.com:443",
                 "--use-ssl",
-                "--metadata", "function-id", "b702f636-f60c-4a3d-a6f4-f3568c13bd7d",
+                "--metadata", "function-id", RIVA_FUNCTION_ID,
                 "--metadata", "authorization", f"Bearer {api_key}",
                 "--language-code", "multi",  # Auto language detection
                 "--input-file", temp_filename
@@ -772,26 +569,56 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             env['PYTHONIOENCODING'] = 'utf-8'
             
             # Run the command with UTF-8 encoding
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env, encoding='utf-8', errors='replace')
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=RIVA_COMMAND_TIMEOUT,
+                    env=env,
+                    encoding='utf-8',
+                    errors='replace'
+                )
+            except subprocess.TimeoutExpired as timeout_exc:
+                raise HTTPException(504, f"NVIDIA Riva STT command timed out after {RIVA_COMMAND_TIMEOUT} seconds") from timeout_exc
             
-            if result.returncode != 0:
-                print(f"Riva client error: {result.stderr}")
-                stderr_lower = result.stderr.lower() if result.stderr else ""
-                stdout_lower = result.stdout.lower() if result.stdout else ""
-                
-                error_keywords = ["failed", "error", "unknown", "timeout", "handshaker", "connect", "grpc", "exception"]
-                
-                is_stt_error = any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords)
-                
-                if is_stt_error:
-                    print(f" STT Error detected: {result.stderr}")
+            stderr_lower = (result.stderr or "").lower()
+            stdout_lower = (result.stdout or "").lower()
+            
+            error_keywords = [
+                "failed", "error", "unknown", "timeout", "handshaker", "connect",
+                "grpc", "exception", "degraded", "invalidargument", "stateful"
+            ]
+            
+            if result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
+                print(f"Riva client error: stdout={result.stdout!r} stderr={result.stderr!r}")
+
+                degraded_failure = "degraded" in stderr_lower or "degraded" in stdout_lower or "invalidargument" in stderr_lower or "invalidargument" in stdout_lower
+                if degraded_failure and RIVA_FALLBACK_FUNCTION_ID and RIVA_FALLBACK_FUNCTION_ID != RIVA_FUNCTION_ID:
+                    print(f"Riva function degraded. Retrying with fallback function-id: {RIVA_FALLBACK_FUNCTION_ID}")
+                    cmd[7] = RIVA_FALLBACK_FUNCTION_ID
+                    try:
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=RIVA_COMMAND_TIMEOUT,
+                            env=env,
+                            encoding='utf-8',
+                            errors='replace'
+                        )
+                        stderr_lower = (result.stderr or "").lower()
+                        stdout_lower = (result.stdout or "").lower()
+                    except subprocess.TimeoutExpired as timeout_exc:
+                        raise HTTPException(504, f"NVIDIA Riva STT command timed out after {RIVA_COMMAND_TIMEOUT} seconds") from timeout_exc
+
+                if result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
+                    print(f" STT Error detected from Riva response")
                     return {
                         "success": False,
                         "error": "STT service unavailable. Please try again.",
                         "stage": "whisper_stt"
                     }
-                else:
-                    raise HTTPException(500, f"Riva client failed: {result.stderr}")
             
             print(f"Riva client output: {result.stdout}")
             
@@ -967,6 +794,80 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
         raise HTTPException(500, f"Layer 1 ingestion failed: {str(e)}")
 
     # Step 4: Pass to Layer 2 Orchestrator
+    # Step 3.5: Quick Knowledge-Base check (prefer KB answer when confident)
+    try:
+        from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
+        kb_system = IntelligentRAGSystem()
+        import asyncio
+        # Load docs if needed
+        if asyncio.iscoroutinefunction(kb_system.load_documents):
+            await kb_system.load_documents()
+        else:
+            kb_system.load_documents()
+
+        if asyncio.iscoroutinefunction(kb_system.ask_question):
+            kb_result = await kb_system.ask_question(state.normalized_text_en)
+        else:
+            kb_result = kb_system.ask_question(state.normalized_text_en)
+
+        results["stages"]["knowledge_base"] = {
+            "success": True,
+            "answer": kb_result.get("answer", None),
+            "confidence": kb_result.get("confidence", 0.0),
+            "documents_found": kb_result.get("documents_found", 0)
+        }
+
+        # If KB has a confident answer, use it and skip orchestrator
+        if kb_result.get("answer") and kb_result.get("confidence", 0.0) >= 0.6:
+            english_response = kb_result.get("answer")
+            results["agent_response"] = english_response
+            results["stages"]["knowledge_base"]["used"] = True
+
+            # Apply output validation/redaction
+            try:
+                from app.security_layer2.output_validator import validate_output
+                validated_response = validate_output(english_response)
+                results["stages"]["security_layer2"] = {
+                    "success": True,
+                    "modified": validated_response != english_response
+                }
+                english_response = validated_response
+            except Exception as e:
+                logger.error(f"[Security-L2] ERROR during KB flow: {str(e)}")
+                results["stages"]["security_layer2"] = {"success": False, "error": str(e)}
+
+            # Localize and deliver final KB answer
+            from app.layer3.translation.translator import translate_from_english
+            localized_response = translate_from_english(english_response, detected_language)
+
+            from app.layer3.delivery import deliver_response
+            from app.schemas.conversation import ConversationState, SourceChannel
+            delivery_state = ConversationState(
+                conversation_id="voice-pipeline-kb",
+                source_channel=SourceChannel.VOICE,
+                source_language=detected_language,
+                original_text=state.original_text,
+                normalized_text_en=english_response,
+                final_response_en=english_response,
+                final_response_localized=localized_response
+            )
+            audio_state = deliver_response(delivery_state)
+
+            if audio_state.final_response_audio:
+                import base64
+                results["final_response_audio"] = base64.b64encode(audio_state.final_response_audio).decode('utf-8')
+                results["audio_model_used"] = audio_state.audio_model_used
+                results["audio_sample_rate"] = audio_state.audio_sample_rate
+                results["final_response_localized"] = audio_state.final_response_localized
+                add_to_history(session_id, text_for_ingestion, localized_response or english_response)
+
+            # Return early since KB answered the user
+            return results
+    except Exception as e:
+        # KB lookup should not break the main pipeline
+        logger.warning(f"[KnowledgeBase] KB quick-check failed: {e}")
+        results["stages"]["knowledge_base"] = {"success": False, "error": str(e)}
+
     try:
         result_state = smart_pm_routing(state)
         
