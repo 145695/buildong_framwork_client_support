@@ -13,7 +13,9 @@ def create_session() -> str:
     sessions[session_id] = {
         "history": [],
         "last_active": time.time(),
-        "created_at": time.time()
+        "created_at": time.time(),
+        "audio_state": "IDLE",
+        "is_audio_session": False,
     }
     print(f"🟢 SESSION START: {session_id}")
     logger.debug(f"[Session] Created: {session_id}")
@@ -51,6 +53,19 @@ def end_session(session_id: str):
         print(f"🔴 SESSION END: {session_id}")
         logger.debug(f"[Session] Ended: {session_id}")
 
+def update_audio_state(session_id: str, new_state: str):
+    """Update the audio_state field for a session."""
+    session = sessions.get(session_id)
+    if session:
+        session["audio_state"] = new_state
+        session["last_active"] = time.time()
+        logger.debug(f"[Session] Audio state updated to {new_state} for {session_id}")
+
+def get_audio_state(session_id: str) -> str:
+    """Retrieve the current audio_state for a session, or None if not found."""
+    session = sessions.get(session_id)
+    return session.get("audio_state") if session else None
+
 def get_history_as_text(session_id: str) -> str:
     session = get_session(session_id)
     if not session or not session["history"]:
@@ -60,3 +75,25 @@ def get_history_as_text(session_id: str) -> str:
         lines.append(f"Customer: {turn['user']}")
         lines.append(f"Avatar: {turn['avatar']}")
     return "\n".join(lines)
+
+# Simple session manager wrapper for import compatibility
+class SessionManager:
+    def __init__(self):
+        self.sessions = sessions
+
+    def update_audio_state(self, session_id: str, new_state: str):
+        """Update the audio_state field for a session."""
+        session = self.sessions.get(session_id)
+        if session:
+            session["audio_state"] = new_state
+            session["last_active"] = time.time()
+            logger.debug(f"[Session] Audio state updated to {new_state} for {session_id}")
+
+    def get_audio_state(self, session_id: str) -> str:
+        """Retrieve the current audio_state for a session, or None if not found."""
+        session = self.sessions.get(session_id)
+        return session.get("audio_state") if session else None
+
+# Export a singleton instance
+session_manager = SessionManager()
+    

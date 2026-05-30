@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Voice Lab - Real-Time Audio</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Real-Time Audio Capture</h1>
+        <button id="mic-button">🎤 Hold to Speak</button>
+        <div id="status">Ready...</div>
+    </div>
+    <script>
+        const micButton = document.getElementById('mic-button');
+        const statusDiv = document.getElementById('status');
+        const wsUrl = '/ws/audio/{{session_id}}';
+        let ws;
+        let audioContext;
+        let processor;
+
+        micButton.addEventListener('mousedown', async () => {
+            statusDiv.textContent = '🔴 Recording...';
+            try {
+                // FIX 1: Removed the double-nested/malformed constraints object.
+                // FIX 2: channels -> channelCount (correct Web Audio API property name).
+                // FIX 3: Added async/await instead of .then().catch() for cleaner error handling.
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        noiseSuppression: true,
+                        echoCancellation: true,
+                        autoGainControl: true
+                    }
+                });
+
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                processor = audioContext.createScriptProcessor(512, 1, 1);
+
+                // FIX 4: Pass the full stream to createMediaStreamSource, not just one audio track.
+                const inputNode = audioContext.createMediaStreamSource(stream);
+                inputNode.connect(processor);
+
+                processor.onaudioprocess = (e) => {
+                    const audioData = e.inputBuffer.getChannelData(0);
+
+                    // FIX 5: Allocate a plain ArrayBuffer for PCM16 data (not a Web Audio AudioBuffer).
+                    // audioContext.createBuffer() returns an AudioBuffer, not an ArrayBuffer —
+                    // ws.send() needs a raw ArrayBuffer or typed array.
+                    const pcmBuffer = new ArrayBuffer(audioData.length * 2);
+                    const dataView = new DataView(pcmBuffer);
+                    for (let i = 0; i < audioData.length; i++) {
+                        // FIX 6: Scale float32 sample correctly to int16 range (multiply by 0x7FFF).
+                        dataView.setInt16(i * 2, audioData[i] * 0x7FFF, true);
+                    }
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(pcmBuffer);
+                    }
+                };
+
+                // Open WebSocket
+                ws = new WebSocket(wsUrl);
+                ws.binaryType = 'arraybuffer';
+                ws.onopen = () => {
+                    statusDiv.textContent = '🔴 Recording...';
+                };
+                ws.onmessage = () => {
+                    statusDiv.textContent = '📢 Speaking...';
+                };
+                ws.onerror = (err) => {
+                    console.error('WebSocket error:', err);
+                    statusDiv.textContent = '❌ WebSocket connection failed';
+                };
+
+            } catch (err) {
+                // FIX 7: Log the actual error so the browser console shows the real reason.
+                console.error('Mic error:', err);
+                statusDiv.textContent = '❌ Mic access denied';
+            }
+        });
+
+        micButton.addEventListener('mouseup', () => {
+            statusDiv.textContent = '⏳ Processing...';
+            if (ws) ws.close();
+            if (audioContext) audioContext.close();
+            // FIX 8: Removed the duplicate statusDiv.textContent = '⏳ Processing...' line.
+        });
+    </script>
+</body>
+</html>

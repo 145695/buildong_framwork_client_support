@@ -1,10 +1,9 @@
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-
 import torch
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from kokoro import KPipeline
 from transformers import pipeline
 
@@ -14,6 +13,7 @@ load_dotenv()
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "openai/whisper-tiny")
 LOAD_VOICE_MODELS = os.getenv("LOAD_VOICE_MODELS", "true").lower() == "true"
+
 ml_models: dict[str, object] = {}
 
 
@@ -22,7 +22,6 @@ async def lifespan(_: FastAPI):
     print(f"Using device: {DEVICE}")
     print("Preparing runtime...")
 
-    
     # Load intent model at startup
     try:
         from app.layer2.shared.model_loader import load_model_at_startup
@@ -38,8 +37,10 @@ async def lifespan(_: FastAPI):
         print(f"Nemotron model loading failed: {exc}")
 
     print(f"LOAD_VOICE_MODELS = {LOAD_VOICE_MODELS}")
+
     if LOAD_VOICE_MODELS:
         print("Loading voice models...")
+
         # Layer 1: STT (NVIDIA Riva gRPC - whisper-large-v3)
         ml_models["stt_whisper"] = "nvidia_riva_grpc"
         print("STT configured: NVIDIA Riva gRPC (whisper-large-v3)")
@@ -63,26 +64,8 @@ async def lifespan(_: FastAPI):
         if ml_models.get("tts_kokoro_en") or ml_models.get("tts_kokoro_fr"):
             print("Layer 3: Kokoro loaded (EN + FR)")
 
+        # FIX 2: Removed runtime pip install — f5-tts must be pre-installed via requirements.txt
         try:
-            print("Installing f5_tts...")
-            # Try to install f5_tts if not available
-            import subprocess
-            import sys
-            try:
-                # Try different package names for f5-tts
-                packages_to_try = ["f5-tts", "f5-tts-pytorch", "F5-TTS"]
-                for package in packages_to_try:
-                    try:
-                        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-                        print(f"f5_tts installed successfully using {package}")
-                        break
-                    except:
-                        continue
-                else:
-                    print("All f5_tts package attempts failed")
-            except:
-                print("f5_tts installation failed, using existing installation")
-            
             from f5_tts.api import F5TTS
             print("Loading Habibi-TTS...")
             ml_models["tts_habibi"] = F5TTS()
@@ -91,17 +74,16 @@ async def lifespan(_: FastAPI):
             ml_models["tts_habibi"] = None
             print(f"Layer 3: Habibi-TTS not available: {exc}")
             print("Arabic TTS will use gTTS as fallback")
+
     else:
         ml_models["stt_whisper"] = None
         ml_models["tts_kokoro_en"] = None
         ml_models["tts_kokoro_fr"] = None
         ml_models["tts_habibi"] = None
         print("Voice models skipped (set LOAD_VOICE_MODELS=true to enable).")
-    
+
     print(f"Final ml_models keys: {list(ml_models.keys())}")
-
     yield
-
     print("Shutting down...")
     ml_models.clear()
 
@@ -109,6 +91,50 @@ async def lifespan(_: FastAPI):
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="AI Client Support System", lifespan=lifespan)
+
+# Serve static files (HTML, JS, CSS) from the app directory
+from fastapi.staticfiles import StaticFiles
+# Serve static files from the app directory
+app.mount("/static", StaticFiles(directory="app", html=True), name="static")
+
+# Serve voice‑lab landing page
+@app.get("/voice-lab", response_class=HTMLResponse)
+async def voice_lab_page():
+    """Serve landing page with Start Call button that redirects to full pipeline mic interface."""
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>BNA Virtual Agent</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+            .container { text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            h1 { color: #333; margin-bottom: 30px; }
+            .start-btn { background: #007bff; color: white; border: none; padding: 20px 40px; font-size: 18px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; transition: background 0.3s; }
+            .start-btn:hover { background: #0056b3; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>BNA Virtual Agent</h1>
+            <button class="start-btn" onclick="startCall()">📞 Start Call</button>
+        </div>
+        <script>
+            function startCall() {
+                window.location.href = '/voice-lab-complete';
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# Redirect legacy /voice-lab-ui.html requests to the new /voice‑lab endpoint
+@app.get("/voice-lab-ui.html", response_class=HTMLResponse)
+async def redirect_voice_lab_ui():
+    """Redirect old URL to the new voice‑lab page."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/voice-lab")
 
 # Add CORS middleware
 app.add_middleware(
@@ -122,28 +148,25 @@ app.add_middleware(
 from app.routers.chat import router as chat_router
 from app.routers.voice import router as voice_router
 from app.routers.session import router as session_router
+from app.routers.ws_audio import router as ws_audio_router
 
 app.include_router(chat_router)
 app.include_router(voice_router)
 app.include_router(session_router)
+app.include_router(ws_audio_router)
 
 
 @app.get("/")
 async def root():
-    return {
-        "status": "online",
-        "device": DEVICE,
-        "whisper_model": WHISPER_MODEL,
-        "loaded_models": {k: (v is not None) for k, v in ml_models.items()},
-        "load_voice_models": LOAD_VOICE_MODELS,
-        "milestone": "A",
-        "capabilities": ["chat_flow", "stt_test", "tts_test", "layer2_framework"],
-    }
+    """Redirect to voice lab landing page."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/voice-lab")
 
 
 @app.get("/tts-ui", summary="TTS UI with clickable download links")
 async def tts_ui():
     """Simple HTML page for TTS with clickable download links"""
+    # FIX 4: Removed duplicate local import of HTMLResponse (already imported at top)
     html_content = """
     <!DOCTYPE html>
     <html>
@@ -187,7 +210,6 @@ async def tts_ui():
                 <div id="result-content"></div>
             </div>
         </div>
-
         <script>
             async function generateSpeech() {
                 const text = document.getElementById('text').value;
@@ -206,13 +228,8 @@ async def tts_ui():
                 try {
                     const response = await fetch('/test/tts', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            text: text,
-                            language: language
-                        })
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: text, language: language })
                     });
                     
                     const data = await response.json();
@@ -245,13 +262,13 @@ async def tts_ui():
     </body>
     </html>
     """
-    from fastapi.responses import HTMLResponse
     return HTMLResponse(content=html_content)
 
 
 @app.get("/voice-orchestrator-ui", summary="Voice to Orchestrator Testing UI")
 async def voice_orchestrator_ui():
     """Simple HTML page for testing voice-to-orchestrator pipeline"""
+    # FIX 4: Removed duplicate local import of HTMLResponse (already imported at top)
     html_content = """
     <!DOCTYPE html>
     <html>
@@ -288,7 +305,6 @@ async def voice_orchestrator_ui():
                 <div id="result-content"></div>
             </div>
         </div>
-
         <script>
             async function processVoice() {
                 const audioInput = document.getElementById('audio');
@@ -319,6 +335,8 @@ async def voice_orchestrator_ui():
                             .map(agent => `<span class="agent-tag">${agent}</span>`)
                             .join('');
                         
+                        // FIX 1: Corrected broken ternary — else branch now closed properly
+                        // before Mission Briefs and Final Response sections
                         resultContent.innerHTML = `
                             <div class="success">Voice processing successful!</div>
                             
@@ -350,7 +368,6 @@ async def voice_orchestrator_ui():
                                 <div>${agentsHtml}</div>
                             </div>
                             
-                            <!-- Final Voice Response Section - Always Visible -->
                             <div class="section" style="background-color: #e8f5e8; border: 2px solid #d4edda;">
                                 <h4>🔊 Final Voice Output</h4>
                                 <p><strong>🌍 Localized Response (${data.detected_language}):</strong></p>
@@ -368,7 +385,7 @@ async def voice_orchestrator_ui():
                                         💾 Download Audio
                                     </a>
                                 </div>
-                                ` : `
+                                ` : `<p style="color: #888;">⚠️ No audio generated for this response.</p>`}
                             </div>
                             
                             <div class="section">
@@ -399,14 +416,13 @@ async def voice_orchestrator_ui():
     </body>
     </html>
     """
-    from fastapi.responses import HTMLResponse
     return HTMLResponse(content=html_content)
 
 
 @app.get("/voice-lab", summary="BNA Virtual Agent Landing Page")
 async def voice_lab_landing():
     """Simple landing page for starting conversations"""
-    from fastapi.responses import HTMLResponse
+    # FIX 4: Removed duplicate local import of HTMLResponse (already imported at top)
     html_content = """
     <!DOCTYPE html>
     <html>
@@ -447,7 +463,7 @@ async def voice_lab_landing():
 @app.get("/voice-lab/session/{session_id}", summary="Voice Pipeline with Session")
 async def voice_lab_session(session_id: str):
     """Voice pipeline interface with session management"""
-    from fastapi.responses import HTMLResponse
+    # FIX 4: Removed duplicate local import of HTMLResponse (already imported at top)
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -498,8 +514,16 @@ async def voice_lab_session(session_id: str):
 @app.get("/voice-lab-complete", summary="Complete Voice Pipeline Laboratory")
 async def voice_lab_complete():
     """Complete voice pipeline testing interface with final voice output"""
-    from fastapi.responses import HTMLResponse
-    with open('voice_lab_complete.html', 'r', encoding='utf-8') as f:
+    # FIX 5: Guard against missing file instead of crashing with FileNotFoundError
+    # Look in project root, not app directory
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    html_path = os.path.join(project_root, "voice_lab_complete.html")
+    if not os.path.exists(html_path):
+        return JSONResponse(
+            status_code=404,
+            content={"error": "voice_lab_complete.html not found. Please ensure the file exists in the project root."}
+        )
+    with open(html_path, "r", encoding="utf-8") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
@@ -528,10 +552,7 @@ async def tts_test_page():
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
+        h1 { color: #333; text-align: center; }
         .test-section {
             margin: 20px 0;
             padding: 20px;
@@ -553,26 +574,16 @@ async def tts_test_page():
             border-radius: 5px;
             cursor: pointer;
         }
-        button {
-            background-color: #007bff;
-            color: white;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
+        button { background-color: #007bff; color: white; }
+        button:hover { background-color: #0056b3; }
         .result {
             margin-top: 20px;
             padding: 15px;
             background-color: #f8f9fa;
             border-radius: 5px;
         }
-        .audio-player {
-            margin: 10px 0;
-        }
-        .loading {
-            color: #666;
-            font-style: italic;
-        }
+        .audio-player { margin: 10px 0; }
+        .loading { color: #666; font-style: italic; }
     </style>
 </head>
 <body>
@@ -599,7 +610,6 @@ async def tts_test_page():
             <div id="resultContent"></div>
         </div>
     </div>
-
     <script>
         async function testTTS() {
             const text = document.getElementById('testText').value;
@@ -618,22 +628,15 @@ async def tts_test_page():
             try {
                 const response = await fetch('/test/tts', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        text: text,
-                        language: language
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, language: language })
                 });
                 
                 if (response.ok) {
                     const data = await response.json();
                     
                     if (data.success) {
-                        // Use base64 audio data directly
                         const audioSrc = data.audio_base64;
-                        
                         resultContent.innerHTML = `
                             <div class="audio-player">
                                 <audio controls autoplay>

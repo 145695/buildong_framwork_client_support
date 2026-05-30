@@ -405,8 +405,13 @@
     <div class="container">
         <header>
             <div class="header-content">
-                <h1>🎙️ Voice Lab Complete</h1>
-                <p class="subtitle">Advanced AI Voice Pipeline Testing Platform with Final Voice Output</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h1>🎙️ Voice Lab Complete</h1>
+                        <p class="subtitle">Advanced AI Voice Pipeline Testing Platform with Final Voice Output</p>
+                    </div>
+                    <button onclick="endCall()" style="background: #dc3545; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: background 0.3s;">📵 End Call</button>
+                </div>
                 <div class="pipeline-flow">
                     <div class="flow-step">🎤 Speech Detection</div>
                     <div class="flow-arrow">→</div>
@@ -425,19 +430,22 @@
 
         <div class="main-content">
             <div class="upload-section">
-                <h2 style="margin-bottom: 20px; color: #333;">Upload Audio</h2>
-                <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">🎤</div>
-                    <p class="upload-text">Drag & drop your audio file here or click to browse</p>
-                    <p style="font-size: 0.9rem; color: #999;">Supports WAV, MP3, M4A, FLAC</p>
-                    <input type="file" id="audioInput" class="file-input" accept="audio/*">
+                <h2 style="margin-bottom: 20px; color: #333;">🎤 Hold to Speak</h2>
+                <div style="text-align: center; padding: 40px 20px;">
+                    <button id="mic-button" 
+                            style="padding: 30px; font-size: 48px; background-color: #28a745; 
+                                   color: white; border: none; border-radius: 50%; width: 140px; 
+                                   height: 140px; cursor: pointer; transition: all 0.3s; 
+                                   box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);"
+                            onmousedown="startRecording()"
+                            onmouseup="stopRecording()"
+                            onmouseleave="stopRecording()"
+                            ontouchstart="startRecording()"
+                            ontouchend="stopRecording()">
+                        🎤
+                    </button>
+                    <p id="mic-status" style="margin-top: 20px; font-size: 16px; color: #666; font-weight: 500;">Ready to speak</p>
                 </div>
-                <div id="selectedFile" style="display: none;" class="selected-file">
-                    <strong>Selected:</strong> <span id="fileName"></span>
-                </div>
-                <button id="processBtn" class="process-btn" disabled>
-                    🚀 Start Pipeline Analysis
-                </button>
             </div>
 
             <div class="results-section" id="resultsSection" style="display: none;">
@@ -484,7 +492,194 @@
     </div>
 
     <script>
-        // Upload functionality
+        // WebSocket Audio Streaming (Phase 1)
+        let ws = null;
+        let audioContext = null;
+        let processor = null;
+        let mediaStream = null;
+        let isRecording = false;
+        let sessionId = null;
+
+        async function startRecording() {
+            if (isRecording) return;
+            
+            // Ensure session_id is set before recording
+            if (!sessionId) {
+                console.error('[Session] No session_id available');
+                updateMicStatus('Session not initialized', '#dc3545');
+                return;
+            }
+            
+            console.log('[Session] Starting recording with session:', sessionId);
+            
+            try {
+                // Request microphone with WebRTC constraints
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 16000
+                    }
+                });
+                
+                // Create AudioContext at 16kHz
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 16000
+                });
+                
+                // Create ScriptProcessor (512 samples per chunk - must be power of 2)
+                processor = audioContext.createScriptProcessor(512, 1, 1);
+                
+                // Connect microphone to processor
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+                
+                // Open WebSocket connection
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws/audio/${sessionId}`);
+                ws.binaryType = 'arraybuffer';
+                
+                ws.onopen = () => {
+                    console.log('[WebSocket] Connected');
+                    updateMicStatus('🔴 Recording...', '#dc3545');
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'status') {
+                            console.log('[WebSocket] Status:', data.state);
+                            updateMicStatus(`Status: ${data.state}`, '#17a2b8');
+                        } else if (data.type === 'status_update') {
+                            console.log('[WebSocket] Status Update:', data.stage, data.message);
+                            updateMicStatus(`${data.message}`, '#ffc107');
+                        } else if (data.type === 'status_audio') {
+                            console.log('[WebSocket] Status Audio:', data.stage);
+                            // Play the status audio
+                            if (data.audio) {
+                                playAudio(data.audio);
+                            }
+                        } else if (data.type === 'transcript') {
+                            console.log('[WebSocket] Transcript:', data.text);
+                            updateMicStatus(`Transcript: ${data.text}`, '#17a2b8');
+                        } else if (data.type === 'response_text') {
+                            console.log('[WebSocket] Response:', data.text);
+                            updateMicStatus(`Response: ${data.text}`, '#28a745');
+                        } else if (data.type === 'pipeline_result') {
+                            console.log('[WebSocket] Pipeline Result:', data.data);
+                            updateMicStatus('Pipeline complete!', '#28a745');
+
+                            // Show results section and display pipeline results
+                            const resultsSection = document.getElementById('resultsSection');
+                            if (resultsSection) {
+                                resultsSection.style.display = 'block';
+                                updateStatus('success', 'Analysis Complete');
+                                try {
+                                    displayResults(data.data);
+                                    displayVoiceOutput(data.data);
+                                } catch (e) {
+                                    console.error('[Display] Error displaying results:', e);
+                                    console.error('[Display] Data structure:', JSON.stringify(data.data, null, 2));
+                                }
+                            } else {
+                                console.error('[Display] resultsSection not found');
+                            }
+                        } else if (data.type === 'error') {
+                            console.error('[WebSocket] Error:', data.message);
+                            updateMicStatus(`Error: ${data.message}`, '#dc3545');
+                        }
+                    } catch (e) {
+                        console.error('[WebSocket] JSON parse error:', e);
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('[WebSocket] Error:', error);
+                    updateMicStatus('Connection error', '#dc3545');
+                };
+                
+                ws.onclose = () => {
+                    console.log('[WebSocket] Disconnected');
+                    updateMicStatus('Ready to speak', '#666');
+                };
+                
+                // Handle audio frames
+                processor.onaudioprocess = (event) => {
+                    if (!isRecording || !ws || ws.readyState !== WebSocket.OPEN) return;
+                    
+                    const inputData = event.inputBuffer.getChannelData(0);
+                    
+                    // Convert Float32 to PCM16
+                    const pcm16 = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        const s = Math.max(-1, Math.min(1, inputData[i]));
+                        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    
+                    // Send as binary
+                    ws.send(pcm16.buffer);
+                };
+                
+                isRecording = true;
+                console.log('[Audio] Recording started');
+                
+            } catch (error) {
+                console.error('[Audio] Microphone access error:', error);
+                updateMicStatus(`Error: ${error.message}`, '#dc3545');
+            }
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            
+            isRecording = false;
+            console.log('[Audio] Recording stopped');
+            
+            // Send end_of_speech signal
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const msg = JSON.stringify({type: 'end_of_speech'});
+                ws.send(msg);
+                console.log('[WebSocket] Sent end_of_speech');
+                updateMicStatus('⏳ Processing...', '#ffc107');
+            }
+            
+            // Stop audio capture
+            if (processor) {
+                processor.disconnect();
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        function updateMicStatus(message, color) {
+            const statusEl = document.getElementById('mic-status');
+            if (statusEl) {
+                statusEl.textContent = message;
+                statusEl.style.color = color;
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (ws) ws.close();
+            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+        });
+
+        // Helper function to play audio from base64 data URL
+        function playAudio(audioDataUrl) {
+            try {
+                const audio = new Audio(audioDataUrl);
+                audio.play().catch(e => console.error('Error playing audio:', e));
+            } catch (e) {
+                console.error('Error creating audio element:', e);
+            }
+        }
+
+        // Upload functionality (kept for reference, not used in Phase 1)
         const uploadArea = document.getElementById('uploadArea');
         const audioInput = document.getElementById('audioInput');
         const selectedFile = document.getElementById('selectedFile');
@@ -497,84 +692,39 @@
         const summaryGrid = document.getElementById('summaryGrid');
         const stagesContainer = document.getElementById('stagesContainer');
         
-        // Session management
-        let sessionId = null;
-        
-        // Voice output elements
-        const voiceOutputSection = document.getElementById('voiceOutputSection');
-        const detectedLang = document.getElementById('detectedLang');
-        const localizedResponse = document.getElementById('localizedResponse');
-        const audioContainer = document.getElementById('audioContainer');
-        const audioModel = document.getElementById('audioModel');
-        const sampleRate = document.getElementById('sampleRate');
-        const audioPlayer = document.getElementById('audioPlayer');
-        const audioSource = document.getElementById('audioSource');
-        const downloadLink = document.getElementById('downloadLink');
-
-        // Drag and drop
-        uploadArea.addEventListener('click', () => audioInput.click());
-        
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-        
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-        
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFileSelect(files[0]);
-            }
-        });
-
-        audioInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFileSelect(e.target.files[0]);
-            }
-        });
-
-        function handleFileSelect(file) {
-            fileName.textContent = file.name;
-            selectedFile.style.display = 'block';
-            processBtn.disabled = false;
-        }
-
-        processBtn.addEventListener('click', processFullPipeline);
-
-        // Get session_id from URL or create new one
+        // Session ID management
         window.addEventListener('load', async () => {
-            // Try to get session_id from URL
+            // Get session_id from URL
             const urlParams = new URLSearchParams(window.location.search);
             const urlSessionId = urlParams.get('session_id');
             
             if (urlSessionId) {
                 sessionId = urlSessionId;
-                console.log('Using existing session:', sessionId);
+                console.log('[Session] Using existing session:', sessionId);
             } else {
-                // Create new session if none in URL
+                // Fallback - create new session
                 try {
-                    const response = await fetch('/test/session/create', { method: 'POST' });
+                    const response = await fetch('/session/create', { method: 'POST' });
                     const data = await response.json();
                     sessionId = data.session_id;
-                    console.log('Session created:', sessionId);
+                    console.log('[Session] Created new session:', sessionId);
                 } catch (error) {
-                    console.error('Failed to create session:', error);
+                    console.error('[Session] Failed to create session:', error);
                 }
             }
         });
 
-        // Clean up session on page unload
-        window.addEventListener('beforeunload', () => {
+        async function endCall() {
             if (sessionId) {
-                fetch(`/session/${sessionId}`, { method: 'DELETE' })
-                    .catch(error => console.error('Failed to end session:', error));
+                try {
+                    await fetch(`/session/${sessionId}`, { method: 'DELETE' });
+                    console.log('[Session] Session ended:', sessionId);
+                } catch (error) {
+                    console.error('[Session] Failed to end session:', error);
+                }
             }
-        });
+            window.location.href = '/voice-lab';
+        }
 
         async function processFullPipeline() {
             if (!audioInput.files.length) return;
@@ -628,10 +778,16 @@
         }
 
         function displayResults(data) {
-            // Display summary
-            const summary = data.summary;
-            const successRate = Math.round((summary.successful_stages / summary.total_stages) * 100);
-            
+            // Display summary - handle missing summary field
+            const summary = data.summary || {
+                successful_stages: Object.values(data.stages || {}).filter(s => s && s.success).length,
+                total_stages: Object.keys(data.stages || {}).length,
+                original_transcription: data.stages?.whisper_stt?.transcription || 'N/A',
+                detected_language: data.stages?.whisper_stt?.detected_language || 'en',
+                translation_applied: data.stages?.translator?.translation_applied || false
+            };
+            const successRate = summary.total_stages > 0 ? Math.round((summary.successful_stages / summary.total_stages) * 100) : 0;
+
             summaryGrid.innerHTML = `
                 <div class="summary-card">
                     <div class="summary-label">Success Rate</div>
@@ -639,11 +795,11 @@
                 </div>
                 <div class="summary-card">
                     <div class="summary-label">Original Text</div>
-                    <div class="summary-value">${summary.original_transcription.substring(0, 50)}...</div>
+                    <div class="summary-value">${(summary.original_transcription || 'N/A').substring(0, 50)}...</div>
                 </div>
                 <div class="summary-card">
                     <div class="summary-label">Language</div>
-                    <div class="summary-value">${summary.detected_language.toUpperCase()}</div>
+                    <div class="summary-value">${(summary.detected_language || 'en').toUpperCase()}</div>
                 </div>
                 <div class="summary-card">
                     <div class="summary-label">Translation</div>
@@ -731,6 +887,35 @@
                 `);
             }
 
+            // Ingestion Stage
+            const ingestionStage = data.stages.ingestion;
+            if (ingestionStage) {
+                stagesHtml += createStageCard('📥 Ingestion', ingestionStage, `
+                    <div class="stage-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Conversation ID:</span>
+                            <span class="detail-value">${ingestionStage.conversation_id}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Original Text:</span>
+                            <span class="detail-value">${ingestionStage.original_text}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Normalized Text:</span>
+                            <span class="detail-value">${ingestionStage.normalized_text_en}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">PII Masked:</span>
+                            <span class="detail-value">${ingestionStage.pii_masked ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Success:</span>
+                            <span class="detail-value">${ingestionStage.success ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                    </div>
+                `);
+            }
+
             // Orchestrator Stage
             const orchestratorStage = data.stages.orchestrator;
             if (orchestratorStage) {
@@ -779,15 +964,11 @@
                         </div>
                         <div class="detail-row">
                             <span class="detail-label">Documents Found:</span>
-                            <span class="detail-value">${kbStage.documents_found}</span>
+                            <span class="detail-value">${kbStage.documents_found || 0}</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">Needs Clarification:</span>
-                            <span class="detail-value">${kbStage.needs_clarification ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Sources:</span>
-                            <span class="detail-value">${kbStage.sources.length} documents</span>
+                            <span class="detail-label">KB Used:</span>
+                            <span class="detail-value">${kbStage.used ? '✅ Yes' : '❌ No'}</span>
                         </div>
                         <div class="detail-row">
                             <span class="detail-label">Success:</span>
@@ -795,13 +976,9 @@
                         </div>
                     </div>
                     <div class="stage-content" style="margin-top: 15px;">
-                        <strong>Sources (${kbStage.sources.length}):</strong>
-                        <div style="margin-top: 8px; padding: 10px; background: #e9ecef; border-radius: 4px; font-size: 12px;">
-                            ${kbStage.sources.map(source => `• ${source}`).join('<br>')}
-                        </div>
                         <strong style="margin-top: 15px; display: block;">KB Answer:</strong>
                         <div style="margin-top: 10px; padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; border-radius: 4px; white-space: pre-wrap; font-family: inherit; line-height: 1.6;">
-                            ${kbStage.answer}
+                            ${kbStage.answer || 'No answer available'}
                         </div>
                     </div>
                 `);
@@ -902,17 +1079,19 @@
         function displayVoiceOutput(data) {
             // Always show the voice output section
             voiceOutputSection.style.display = 'block';
-            
-            // Update localized response
-            detectedLang.textContent = data.detected_language || 'Unknown';
-            localizedResponse.textContent = data.final_response_localized || 'No localized response available';
-            
+
+            // Update localized response - handle missing fields
+            const detectedLangEl = document.getElementById('detectedLang');
+            const localizedResponseEl = document.getElementById('localizedResponse');
+            if (detectedLangEl) detectedLangEl.textContent = data.stages?.whisper_stt?.detected_language || 'Unknown';
+            if (localizedResponseEl) localizedResponseEl.textContent = data.agent_response || 'No response available';
+
             // Update audio if available
             if (data.final_response_audio) {
                 audioContainer.style.display = 'block';
                 audioModel.textContent = data.audio_model_used || 'No audio model';
                 sampleRate.textContent = data.audio_sample_rate || 'Unknown rate';
-                
+
                 // Set audio source
                 audioSource.src = `data:audio/wav;base64,${data.final_response_audio}`;
                 downloadLink.href = `data:audio/wav;base64,${data.final_response_audio}`;

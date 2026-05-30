@@ -17,6 +17,8 @@ gradio_client>=0.10.0
 numpy>=1.24.0
 soundfile>=0.12.1
 python-multipart>=0.0.6
+webrtcvad>=2.0.10    # Voice Activity Detection
+pyaudio>=0.2.13      # Audio device access
 
 # Text-to-Speech (TTS)
 gTTS>=2.3.0
@@ -49,4 +51,3 @@ sentence-transformers>=3.0.1
 
 # Observability
 langsmith>=0.1.0
-

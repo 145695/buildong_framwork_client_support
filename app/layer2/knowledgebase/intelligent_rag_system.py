@@ -132,6 +132,193 @@ class IntelligentRAGSystem:
             hasher.update(str(txt_path.stat().st_mtime).encode())
         return hasher.hexdigest()
 
+    def _get_file_metadata(self, txt_path: Path) -> Dict[str, Any]:
+        """Get metadata for a single file (hash, modification time, size)"""
+        import hashlib
+        hasher = hashlib.md5()
+        content = txt_path.read_text(encoding="utf-8")
+        hasher.update(content.encode())
+        return {
+            "name": txt_path.name,
+            "hash": hasher.hexdigest(),
+            "mtime": txt_path.stat().st_mtime,
+            "size": txt_path.stat().st_size
+        }
+
+    def _get_pdf_metadata(self, pdf_path: Path) -> Dict[str, Any]:
+        """Get metadata for a single PDF file (hash, modification time, size)"""
+        import hashlib
+        hasher = hashlib.md5()
+        with open(pdf_path, "rb") as f:
+            hasher.update(f.read())
+        return {
+            "name": pdf_path.name,
+            "hash": hasher.hexdigest(),
+            "mtime": pdf_path.stat().st_mtime,
+            "size": pdf_path.stat().st_size
+        }
+
+    def _get_all_files_metadata(self) -> Dict[str, Dict[str, Any]]:
+        """Get metadata for all text files and PDFs"""
+        metadata = {}
+        # Track text files
+        for txt_path in sorted(self.text_dir.glob("*.txt")):
+            metadata[f"txt_{txt_path.name}"] = self._get_file_metadata(txt_path)
+        # Track PDFs
+        for pdf_path in sorted(self.policies_dir.glob("*.pdf")):
+            metadata[f"pdf_{pdf_path.name}"] = self._get_pdf_metadata(pdf_path)
+        return metadata
+
+    def _detect_changed_files(self, cached_metadata: Dict[str, Dict[str, Any]], current_metadata: Dict[str, Dict[str, Any]]) -> List[str]:
+        """Detect which files have changed, been added, or removed"""
+        changed_files = []
+
+        # Check for modified or new files
+        for filename, current_meta in current_metadata.items():
+            if filename not in cached_metadata:
+                changed_files.append(f"{filename} (new)")
+            elif cached_metadata[filename]["hash"] != current_meta["hash"]:
+                changed_files.append(f"{filename} (modified)")
+
+        # Check for removed files
+        for filename in cached_metadata:
+            if filename not in current_metadata:
+                changed_files.append(f"{filename} (removed)")
+
+        return changed_files
+
+    def _convert_pdf_to_text(self, pdf_path: Path) -> bool:
+        """Convert a single PDF to text using pdfplumber"""
+        try:
+            import pdfplumber
+            with pdfplumber.open(pdf_path) as pdf:
+                pages = []
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        pages.append(text.strip())
+
+                full_text = "\n\n".join(pages)
+
+                if len(full_text.strip()) > 50:
+                    output_path = self.text_dir / (pdf_path.stem + ".txt")
+                    output_path.write_text(full_text, encoding="utf-8")
+                    print(f"✅ Converted: {pdf_path.name} -> {output_path.name} ({len(full_text)} chars)")
+                    return True
+                else:
+                    print(f"⚠️  Skipped: {pdf_path.name} -> too short")
+                    return False
+        except Exception as e:
+            print(f"❌ Error converting {pdf_path.name}: {e}")
+            return False
+
+    def _convert_new_pdfs(self, changed_files: List[str]) -> List[str]:
+        """Convert new or modified PDFs to text and return the generated TXT files"""
+        new_txt_files = []
+        for file_info in changed_files:
+            if file_info.startswith("pdf_") and ("(new)" in file_info or "(modified)" in file_info):
+                pdf_name = file_info.split(" (")[0].replace("pdf_", "")
+                pdf_path = self.policies_dir / pdf_name
+                if pdf_path.exists():
+                    if self._convert_pdf_to_text(pdf_path):
+                        new_txt_files.append(pdf_path.stem + ".txt")
+        return new_txt_files
+
+    async def _incremental_update(self, cached_metadata: Dict[str, Dict[str, Any]], current_metadata: Dict[str, Dict[str, Any]], changed_files: List[str]):
+        """Incrementally update the knowledge base with only changed files"""
+        cache_dir = Path(__file__).resolve().parent / "vector_cache"
+
+        # First, convert any new PDFs to text
+        new_txt_files = self._convert_new_pdfs(changed_files)
+        if new_txt_files:
+            print(f"📄 Converted {len(new_txt_files)} new PDFs to text")
+            # Refresh metadata after conversion
+            current_metadata = self._get_all_files_metadata()
+
+        # Load existing data from cache
+        with open(cache_dir / "chunks.pkl", "rb") as f:
+            data = pickle.load(f)
+            self.document_chunks = data["chunks"]
+            self.documents = data["documents"]
+            self.document_profiles = data["profiles"]
+            self.graph_store = GraphStore.from_dict(data.get("graph", {}))
+            self._vector_backend = data.get("vector_backend", "none")
+
+        # Process each changed TXT file (skip PDFs, they're already converted)
+        for file_info in changed_files:
+            if not file_info.startswith("txt_"):
+                continue  # Skip PDF entries, only process TXT files
+
+            filename = file_info.split(" (")[0].replace("txt_", "")  # Extract filename from "txt_filename (new)" format
+            txt_path = self.text_dir / filename
+
+            if "(removed)" in file_info:
+                # Remove chunks for deleted file
+                original_name = txt_path.stem + ".pdf"
+                self.document_chunks = [c for c in self.document_chunks if c["filename"] != original_name]
+                print(f"🗑️  Removed chunks for: {filename}")
+            else:
+                # Process new or modified file
+                try:
+                    content = txt_path.read_text(encoding="utf-8").strip()
+
+                    if len(content) < 50:
+                        print(f"⚠️  {filename}: too short, skipped")
+                        continue
+
+                    # Remove old chunks for this file (if it was modified)
+                    original_name = txt_path.stem + ".pdf"
+                    self.document_chunks = [c for c in self.document_chunks if c["filename"] != original_name]
+
+                    # Process new chunks
+                    chunks = self._create_chunks(content)
+                    useful_chunks = await self._filter_useful_chunks(chunks)
+
+                    if useful_chunks:
+                        profile = await self._profile_document(useful_chunks)
+
+                        for idx, chunk in enumerate(useful_chunks):
+                            self.document_chunks.append({
+                                "filename": original_name,
+                                "content": chunk,
+                                "profile": profile
+                            })
+
+                        self.documents.append(original_name)
+                        self.document_profiles[original_name] = profile
+
+                        # Update graph
+                        for idx, chunk in enumerate(useful_chunks):
+                            try:
+                                chunk_id = f"{original_name}:{idx}"
+                                triples = self.triple_extractor.extract_triples_fallback_only(
+                                    chunk_text=chunk,
+                                    filename=original_name,
+                                    chunk_id=chunk_id,
+                                    doc_hint=profile.get("topic") if isinstance(profile, dict) else None,
+                                )
+                                self.graph_store.add_triples(triples)
+                            except Exception:
+                                pass
+
+                        print(f"✅ Processed: {filename} ({len(useful_chunks)} chunks)")
+                    else:
+                        print(f"⚠️  {filename}: no useful chunks found")
+
+                except Exception as e:
+                    print(f"❌ Error processing {filename}: {e}")
+
+        # Rebuild vector index since chunks changed
+        if EMBEDDINGS_AVAILABLE:
+            try:
+                self._build_vector_index()
+            except Exception as e:
+                print(f"⚠️ Failed to rebuild vector index: {e}")
+
+        # Save updated cache
+        self._save_index(cache_dir)
+        print(f"✅ Incremental update complete ({len(self.document_chunks)} total chunks)")
+
     def _save_index(self, cache_dir: Path):
         """Save FAISS index and chunks to disk"""
         cache_dir.mkdir(exist_ok=True)
@@ -148,7 +335,8 @@ class IntelligentRAGSystem:
                 "profiles": self.document_profiles,
                 "graph": self.graph_store.to_dict(),
                 "vector_backend": self._vector_backend,
-                "hash": self._get_files_hash()
+                "hash": self._get_files_hash(),
+                "file_metadata": self._get_all_files_metadata()
             }, f)
         print(f"✅ Index cached to disk ({len(self.document_chunks)} chunks)")
 
@@ -163,9 +351,23 @@ class IntelligentRAGSystem:
         try:
             with open(chunks_path, "rb") as f:
                 data = pickle.load(f)
-                if data["hash"] != self._get_files_hash():
-                    print("📂 Files changed, rebuilding index...")
-                    return False
+                # Check if file_metadata exists (new format) or use old hash method
+                cached_metadata = data.get("file_metadata")
+                current_metadata = self._get_all_files_metadata()
+
+                if cached_metadata:
+                    # New format: compare individual file metadata
+                    changed_files = self._detect_changed_files(cached_metadata, current_metadata)
+                    if changed_files:
+                        print(f"📂 Files changed: {changed_files}. Rebuilding index...")
+                        return False
+                    print(f"✅ No file changes detected, loading from cache")
+                else:
+                    # Old format: use global hash
+                    if data["hash"] != self._get_files_hash():
+                        print("📂 Files changed, rebuilding index...")
+                        return False
+
                 self.document_chunks = data["chunks"]
                 self.documents = data["documents"]
                 self.document_profiles = data["profiles"]
@@ -227,28 +429,59 @@ class IntelligentRAGSystem:
             return False
     
     async def load_documents(self):
-        """Load and intelligently process documents from text files"""
+        """Load and intelligently process documents from text files with incremental updates"""
         if not self.text_dir.exists():
             print(f"❌ Text directory not found: {self.text_dir}")
             print("Run convert_pdfs_to_text.py first")
             return
-        
-        # Try to load from cache first
+
         cache_dir = Path(__file__).resolve().parent / "vector_cache"
-        if self._load_index(cache_dir):
-            # If embeddings are available but the cache was built without a vector backend,
-            # build it now from cached chunks (fast path; no re-chunking).
-            if EMBEDDINGS_AVAILABLE and self._vector_backend == "none" and self.document_chunks:
-                try:
-                    self._build_vector_index()
-                except Exception:
-                    pass
-            return  # loaded from cache, skip everything else
-        
+        chunks_path = cache_dir / "chunks.pkl"
+
+        # Try to load from cache first
+        if chunks_path.exists():
+            try:
+                with open(chunks_path, "rb") as f:
+                    data = pickle.load(f)
+                    cached_metadata = data.get("file_metadata")
+                    current_metadata = self._get_all_files_metadata()
+
+                    if cached_metadata:
+                        # New format: detect changed files and do incremental update
+                        changed_files = self._detect_changed_files(cached_metadata, current_metadata)
+
+                        if not changed_files:
+                            # No changes, load from cache
+                            print(f"✅ No file changes detected, loading from cache")
+                            if self._load_index(cache_dir):
+                                if EMBEDDINGS_AVAILABLE and self._vector_backend == "none" and self.document_chunks:
+                                    try:
+                                        self._build_vector_index()
+                                    except Exception:
+                                        pass
+                                return
+                        else:
+                            # Incremental update: only process changed files
+                            print(f"📂 Incremental update: {len(changed_files)} files changed")
+                            await self._incremental_update(cached_metadata, current_metadata, changed_files)
+                            return
+                    else:
+                        # Old format: use global hash check
+                        if self._load_index(cache_dir):
+                            if EMBEDDINGS_AVAILABLE and self._vector_backend == "none" and self.document_chunks:
+                                try:
+                                    self._build_vector_index()
+                                except Exception:
+                                    pass
+                            return
+            except Exception as e:
+                print(f"⚠️ Cache load failed: {e}, rebuilding...")
+
+        # Full rebuild if cache doesn't exist or load failed
         txt_files = list(self.text_dir.glob("*.txt"))
         print(f"Found {len(txt_files)} text files in {self.text_dir}")
         print(f"Files: {[f.name for f in txt_files]}")
-        
+
         # Clear any old chunks
         self.document_chunks = []
         self.documents = []
@@ -652,8 +885,8 @@ Answer only: YES (keep) or NO (discard)"""
 
                 # Light topic prior using the existing document profile (not filename-based).
                 wants_tariffs = any(t in query_tokens for t in ["tarif", "tarifs", "frais", "commission", "abonnement", "coût", "cout"])
-                wants_rates = any(t in query_tokens for t in ["taux", "intérêt", "interet", "%", "teg"])
-                wants_credit = any(t in query_tokens for t in ["crédit", "credit", "prêt", "pret", "immobilier", "financement"])
+                wants_rates = any(t in query_tokens for t in ["taux", "intérêt", "interet", "%", "teg", "rate", "interest"])
+                wants_credit = any(t in query_tokens for t in ["crédit", "credit", "prêt", "pret", "immobilier", "financement", "loan", "application", "apply", "document", "documents", "required", "nécessaire", "nécessaires", "ouvrir", "compte", "bank", "banque"])
 
                 for cand in candidates:
                     text_lower = cand["chunk"]["content"].lower()
@@ -676,16 +909,23 @@ Answer only: YES (keep) or NO (discard)"""
                         if wants_tariffs and doc_type in {"tariff_table"}:
                             topic_boost += 0.25
                         if wants_credit and doc_type in {"product_sheet"}:
-                            topic_boost += 0.20
+                            topic_boost += 0.40  # Increased from 0.20
                         if wants_rates and doc_type in {"legal_text", "tariff_table"}:
                             topic_boost += 0.15
                         # Penalize financial reports / notices for client tariff Qs
                         if wants_tariffs and doc_type in {"financial_report"}:
                             topic_boost -= 0.35
+                        # Strong penalty for legal texts when asking about loan documents
+                        if wants_credit and doc_type in {"legal_text"}:
+                            topic_boost -= 0.50
                     # Fallback penalty even if profiling cache is old
                     if wants_tariffs:
-                        if "notice d’information" in text_lower or "notice d'information" in text_lower or "opv" in text_lower:
+                        if "notice d'information" in text_lower or "notice d'information" in text_lower or "opv" in text_lower:
                             topic_boost -= 0.35
+                    # Penalize regulatory articles when asking about loan documents
+                    if wants_credit:
+                        if "article" in text_lower and ("banque d'algérie" in text_lower or "banque d'algerie" in text_lower):
+                            topic_boost -= 0.60
 
                     cand["hybrid_score"] = cand["semantic_score"] + topic_boost + phrase_boost + (keyword_hits * 0.18)
 

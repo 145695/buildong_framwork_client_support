@@ -477,12 +477,21 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
     Complete voice pipeline showing all stages:
     Voice input -> Layer 1 STT -> Translation Gate -> Layer 1 Ingestion -> Layer 2 Orchestrator -> Knowledge Base -> Output
     """
+    return await _voice_full_pipeline_internal(audio, session_id, status_callback=None)
+
+
+async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[str], status_callback: Optional[callable] = None):
+    """
+    Internal voice pipeline with optional status callback.
+    This is the actual implementation that can be called with a callback from WebSocket.
+    """
     from app.main import ml_models
     from app.layer1.ingestion import ingest_chat_request
     from app.layer2.orchestrator import smart_pm_routing
     from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
     from app.layer2.shared.session_manager import create_session, get_session, add_to_history
     from app.schemas.conversation import ChatRequest, SourceChannel
+    from app.utils.status_messages import get_status_message
 
     # Step 1: Session Management
     if session_id:
@@ -505,6 +514,55 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             "processing_steps": []
         }
     }
+
+    # Helper function to send status updates
+    async def send_status(stage: str, language: str = "en"):
+        print(f"[Voice Pipeline] Status update: stage={stage}, language={language}")
+        if status_callback:
+            message = get_status_message(stage, language)
+            print(f"[Voice Pipeline] Calling callback with message: {message}")
+            await status_callback(stage, message, language)
+        else:
+            print(f"[Voice Pipeline] No callback provided")
+
+    # Helper function to generate TTS for status messages
+    async def generate_status_tts(message: str, language: str) -> Optional[bytes]:
+        """Generate TTS audio for status message"""
+        try:
+            from app.main import ml_models
+            import soundfile as sf
+            import io
+
+            # Select TTS model based on language
+            if language == "fr":
+                tts_model = ml_models.get("tts_vosk_fr")
+                if tts_model is None:
+                    return None
+                # Use Vosk for French
+                # Note: Vosk is STT, not TTS - we need a different approach
+                # For now, skip French TTS for status messages
+                return None
+            else:
+                # Use Kokoro for English/Arabic (fallback to English)
+                kokoro = ml_models.get("tts_kokoro_en")
+                if kokoro is None:
+                    return None
+                generator = kokoro(message, voice="af_heart")
+                chunks = []
+                for i, (phonemes, duration, audio) in enumerate(generator):
+                    chunks.append(audio)
+                if not chunks:
+                    return None
+                audio_data = np.concatenate(chunks)
+
+                # Convert to WAV bytes
+                wav_buffer = io.BytesIO()
+                sf.write(wav_buffer, audio_data, 24000, format="WAV")
+                wav_buffer.seek(0)
+                return wav_buffer.read()
+        except Exception as e:
+            print(f"Error generating status TTS: {e}")
+            return None
 
     # Step 1: Load and transcribe audio using Layer 1 STT
     if not ml_models.get("stt_whisper"):
@@ -681,7 +739,10 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             "transcription": transcription,
             "processing_time": "N/A"
         }
-                
+
+        # Send status update after STT with detected language
+        await send_status("translating", detected_language)
+
     except Exception as e:
         error_str = str(e)
         print(f"NVIDIA Riva API error: {error_str}")
@@ -696,6 +757,7 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
     
     # Step 3: Translation Gate - Conditional routing based on language
     text_for_ingestion = transcription
+    text_for_kb = transcription  # Keep original for KB
     translation_applied = False
 
     if detected_language != "en" and detected_language != "unknown":
@@ -703,19 +765,19 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
         try:
             from app.layer2.shared.model_loader import get_nemotron_model
             nemotron = get_nemotron_model()
-            
-            # Translate and sanitize using Nemotron
-            translated_text, safety_label = nemotron.translate_and_sanitize(transcription, detected_language)
-            
+
+            # Translate to English for orchestrator/intent detection
+            english_text, safety_label = nemotron.translate_and_sanitize(transcription, detected_language, "en")
+
             # Apply safety gate
             if safety_label == "unsafe":
                 print(f"🚫 Safety gate blocked: {safety_label}")
                 raise HTTPException(400, "Query blocked by safety filter")
-            
-            text_for_ingestion = translated_text
+
+            text_for_ingestion = english_text
             translation_applied = True
-            print(f"Nemotron translation applied: {transcription[:50]}... -> {translated_text[:50]}...")
-            
+            print(f"Nemotron translation applied: {transcription[:50]}... -> {english_text[:50]}...")
+
             results["stages"]["translator"] = {
                 "success": True,
                 "translation_applied": True,
@@ -723,9 +785,9 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
                 "source_language": detected_language,
                 "target_language": "en",
                 "original_text": transcription,
-                "translated_text": translated_text
+                "translated_text": english_text
             }
-            
+
         except Exception as e:
             print(f"Nemotron translation failed: {e}. Using original transcription.")
             text_for_ingestion = transcription
@@ -735,11 +797,38 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
                 "fallback_used": True
             }
     else:
+        # For English, translate to French for KB search
+        if detected_language == "en":
+            try:
+                from deep_translator import GoogleTranslator
+                text_for_kb = GoogleTranslator(source="en", target="fr").translate(transcription)
+                print(f"English translated to French for KB: {transcription[:50]}... -> {text_for_kb[:50]}...")
+            except Exception as e:
+                print(f"English to French translation failed: {e}. Using original English.")
+                text_for_kb = transcription
+        # For Arabic, translate to French for KB search
+        elif detected_language == "ar":
+            try:
+                from deep_translator import GoogleTranslator
+                text_for_kb = GoogleTranslator(source="ar", target="fr").translate(transcription)
+                print(f"Arabic translated to French for KB: {transcription[:50]}... -> {text_for_kb[:50]}...")
+            except Exception as e:
+                print(f"Arabic to French translation failed: {e}. Using original Arabic.")
+                text_for_kb = transcription
+        # For French, keep as-is for KB search
+        elif detected_language == "fr":
+            text_for_kb = transcription
+            print(f"French kept as-is for KB search.")
+
         print(f"Detected English language. Direct flow to orchestrator.")
         results["stages"]["translator"] = {
             "success": True,
             "translation_applied": False,
-            "reason": f"Language already English or unknown: {detected_language}"
+            "reason": f"Language already English or unknown: {detected_language}",
+            "source_language": detected_language,
+            "target_language": "en",
+            "original_text": transcription,
+            "translated_text": transcription
         }
 
     # Security Layer 1: Input validation before ingestion
@@ -795,6 +884,7 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
 
     # Step 4: Pass to Layer 2 Orchestrator
     # Step 3.5: Quick Knowledge-Base check (prefer KB answer when confident)
+    await send_status("searching_kb", detected_language)
     try:
         from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
         kb_system = IntelligentRAGSystem()
@@ -806,9 +896,9 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             kb_system.load_documents()
 
         if asyncio.iscoroutinefunction(kb_system.ask_question):
-            kb_result = await kb_system.ask_question(state.normalized_text_en)
+            kb_result = await kb_system.ask_question(text_for_kb)
         else:
-            kb_result = kb_system.ask_question(state.normalized_text_en)
+            kb_result = kb_system.ask_question(text_for_kb)
 
         results["stages"]["knowledge_base"] = {
             "success": True,
@@ -817,11 +907,18 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             "documents_found": kb_result.get("documents_found", 0)
         }
 
-        # If KB has a confident answer, use it and skip orchestrator
+        # If KB has a confident answer, pass it through client support agent for English response
         if kb_result.get("answer") and kb_result.get("confidence", 0.0) >= 0.6:
-            english_response = kb_result.get("answer")
-            results["agent_response"] = english_response
+            state.kb_result = kb_result.get("answer")
             results["stages"]["knowledge_base"]["used"] = True
+            results["stages"]["knowledge_base"]["answer"] = kb_result.get("answer")
+
+            # Pass through client support agent to get English response
+            await send_status("generating_response", detected_language)
+            from app.layer2.client_support.agent import client_support_node
+            state = client_support_node(state)
+            english_response = state.final_response_en
+            results["agent_response"] = english_response
 
             # Apply output validation/redaction
             try:
@@ -914,10 +1011,7 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
             
             # Step 2: Translate back to user's original language
             from app.layer3.translation.translator import translate_from_english
-            localized_response = translate_from_english(
-                english_response, 
-                detected_language  # "fr" or "ar" from STT stage
-            )
+            localized_response = translate_from_english(english_response, detected_language)
             logger.debug(f"[Layer3] Localized response: {localized_response}")
             
             # Step 3: Convert to speech

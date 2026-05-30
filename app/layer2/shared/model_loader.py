@@ -39,16 +39,17 @@ class NemotronTranslationModel:
         
         print(f"Nemotron model initialized with NVIDIA API")
     
-    def translate_text(self, text: str, detected_language: str) -> str:
+    def translate_text(self, text: str, detected_language: str, target_language: str = "en") -> str:
         """
-        Translate text to English using appropriate model.
-        
+        Translate text to target language using appropriate model.
+
         Args:
             text: Input text in source language
             detected_language: Source language code (e.g., 'fr', 'ar')
-            
+            target_language: Target language code (e.g., 'en', 'fr')
+
         Returns:
-            Translated English text
+            Translated text in target language
         """
         logger = logging.getLogger(__name__)
         
@@ -65,21 +66,22 @@ class NemotronTranslationModel:
                 max_tokens=512,
             )
 
-            # Use a stronger, explicit translation prompt and a system role for better English output.
+            # Use a stronger, explicit translation prompt and a system role for better output.
+            target_lang_name = "French" if target_language == "fr" else "English"
             if detected_language == "ar":
                 messages = [
                     {
                         "role": "system",
                         "content": (
-                            "You are a professional banking translator specializing in Algerian Arabic (Darija). "
+                            f"You are a professional banking translator specializing in Algerian Arabic (Darija). "
                             "Customers speak in Algerian dialect with non-standard spellings, French-Arabic mixing, and informal language. "
-                            "Translate the input into clean, standard English banking language. "
-                            "Return ONLY the English translation and nothing else."
+                            f"Translate the input into clean, standard {target_lang_name} banking language. "
+                            f"Return ONLY the {target_lang_name} translation and nothing else."
                         )
                     },
                     {
                         "role": "user",
-                        "content": f"Arabic: {text}\nEnglish:"
+                        "content": f"Arabic: {text}\n{target_lang_name}:"
                     }
                 ]
             else:
@@ -87,13 +89,13 @@ class NemotronTranslationModel:
                     {
                         "role": "system",
                         "content": (
-                            "You are a professional translator. Translate the following text into clear, natural English. "
-                            "Return ONLY the English translation and nothing else."
+                            f"You are a professional translator. Translate the following text into clear, natural {target_lang_name}. "
+                            f"Return ONLY the {target_lang_name} translation and nothing else."
                         )
                     },
                     {
                         "role": "user",
-                        "content": f"Source language: {detected_language}\nText: {text}\nEnglish:"
+                        "content": f"Source language: {detected_language}\nText: {text}\n{target_lang_name}:"
                     }
                 ]
             response = client.invoke(messages)
@@ -101,21 +103,21 @@ class NemotronTranslationModel:
 
             logger.debug(f"[Translation] Result: {translated_text}")
 
-            # If we still see output that appears to be French, fallback to GoogleTranslator.
-            if detected_language == "fr" and _seems_french(translated_text):
+            # If we still see output that appears to be French when targeting English, fallback to GoogleTranslator.
+            if target_language == "en" and detected_language == "fr" and _seems_french(translated_text):
                 logger.warning("[Translation] Nemotron output appears to still be French, using fallback translator")
                 raise ValueError("Nemotron output appears to still be French")
 
             return translated_text
 
         except Exception as e:
-                logger.warning(f"[Translation] NVIDIA failed or returned non-English output: {e}. Trying fallback...")
+                logger.warning(f"[Translation] NVIDIA failed or returned non-{target_language} output: {e}. Trying fallback...")
                 try:
                     from deep_translator import GoogleTranslator
                     source_lang = detected_language if detected_language != "en" else "auto"
                     translated = GoogleTranslator(
                         source=source_lang,
-                        target="en"
+                        target=target_language
                     ).translate(text)
                     logger.debug(f"[Translation] Fallback result: {translated}")
                     return translated
@@ -202,23 +204,24 @@ User Safety: [safe|unsafe]"""
             print(f"Safety check API error: {e}")
             return "safe"
     
-    def translate_and_sanitize(self, text: str, source_language: str) -> tuple:
+    def translate_and_sanitize(self, text: str, source_language: str, target_language: str = "en") -> tuple:
         """
-        Translate text to English and apply content safety checks using NVIDIA API.
-        
+        Translate text to target language and apply content safety checks using NVIDIA API.
+
         Args:
             text: Input text in source language
             source_language: Source language code (e.g., 'fr', 'ar')
-            
+            target_language: Target language code (e.g., 'en', 'fr')
+
         Returns:
             Tuple of (translated_text, safety_label)
         """
-        # Step 1: Translate text to English
-        translated_text = self.translate_text(text, source_language)
-        
+        # Step 1: Translate text to target language
+        translated_text = self.translate_text(text, source_language, target_language)
+
         # Step 2: Check safety of translated text
         safety_label = self.check_safety(translated_text)
-        
+
         return translated_text, safety_label
 
 
