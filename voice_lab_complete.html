@@ -3,19 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Lab Complete - AI Pipeline Testing</title>
+    <title>BNA Voice Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #060d09;
-            --surface-color: #0b1610;
             --accent-color: #00e87a;
             --text-color: #c2ddc9;
             --muted-color: #6b9478;
             --danger-color: #ff5555;
-            --border-color: #1a3522;
         }
 
         * {
@@ -32,118 +30,38 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-        }
-
-        /* Typography */
-        h1, h2, h3, h4, h5, h6 {
-            font-family: 'Bricolage Grotesque', sans-serif;
-            font-weight: 600;
+            align-items: center;
+            justify-content: center;
+            position: relative;
         }
 
         .mono {
             font-family: 'DM Mono', monospace;
         }
 
-        /* Navigation Bar */
-        nav {
-            background: rgba(11, 22, 16, 0.7);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-color);
-            padding: 15px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 100;
-        }
-
-        .brand {
-            font-size: 1.2rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .blinking-dot {
-            width: 8px;
-            height: 8px;
-            background-color: var(--accent-color);
-            border-radius: 50%;
-            animation: blink 1.5s infinite ease-in-out;
-            box-shadow: 0 0 8px var(--accent-color);
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-
-        .nav-pills {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .pill {
-            background: rgba(26, 53, 34, 0.5);
-            border: 1px solid var(--border-color);
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            color: var(--muted-color);
-        }
-
-        .pill-arrow {
-            color: var(--border-color);
-            font-size: 0.9rem;
-        }
-
-        .btn-end {
-            background-color: rgba(255, 85, 85, 0.1);
-            color: var(--danger-color);
-            border: 1px solid var(--danger-color);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-end:hover {
-            background-color: var(--danger-color);
-            color: var(--bg-color);
-        }
-
-        /* Main Layout */
-        .main-container {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        /* Left Panel */
-        .left-panel {
-            width: 320px;
-            min-width: 320px;
-            background-color: var(--surface-color);
-            border-right: 1px solid var(--border-color);
+        .call-screen {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 40px 20px;
-            position: relative;
+            justify-content: center;
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            height: 100%;
+            padding-bottom: 80px; /* Space for end call button */
         }
 
         /* Orb and Rings */
-        .orb-wrapper {
+        .orb-container {
             position: relative;
-            width: 150px;
-            height: 150px;
+            width: 220px;
+            height: 220px;
             display: flex;
             justify-content: center;
             align-items: center;
-            margin: auto 0;
             cursor: pointer;
+            margin-bottom: 10px;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .orb-ring {
@@ -151,59 +69,68 @@
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            border: 1px solid var(--accent-color);
+            border: 2px solid rgba(0, 232, 122, 0.4);
             opacity: 0;
             pointer-events: none;
         }
 
-        body.recording .orb-ring:nth-child(1) { animation: expandRing 2s infinite 0s; }
-        body.recording .orb-ring:nth-child(2) { animation: expandRing 2s infinite 0.6s; }
-        body.recording .orb-ring:nth-child(3) { animation: expandRing 2s infinite 1.2s; }
+        body.recording .orb-ring:nth-child(1) { animation: expandRing 1.5s infinite 0s; }
+        body.recording .orb-ring:nth-child(2) { animation: expandRing 1.5s infinite 0.5s; }
+        body.recording .orb-ring:nth-child(3) { animation: expandRing 1.5s infinite 1s; }
 
         @keyframes expandRing {
             0% { transform: scale(0.8); opacity: 0.8; }
-            100% { transform: scale(2); opacity: 0; }
+            100% { transform: scale(1.6); opacity: 0; }
         }
 
         .orb {
             position: relative;
-            width: 120px;
-            height: 120px;
+            width: 160px;
+            height: 160px;
             border-radius: 50%;
-            background: radial-gradient(circle at center, #00e87a 0%, #007a40 50%, #002211 100%);
-            box-shadow: 0 0 40px rgba(0, 232, 122, 0.4), inset 0 0 20px rgba(255,255,255,0.2);
+            background: radial-gradient(circle at 35% 35%, #00e87a 0%, #007a40 50%, #002211 100%);
+            box-shadow: 0 0 40px rgba(0, 232, 122, 0.3), inset 0 0 20px rgba(255,255,255,0.2);
             animation: breathe 4s ease-in-out infinite;
             z-index: 10;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 2rem;
-            color: rgba(255,255,255,0.8);
-            border: none;
-            outline: none;
         }
 
         @keyframes breathe {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(0, 232, 122, 0.3); }
-            50% { transform: scale(1.06); box-shadow: 0 0 50px rgba(0, 232, 122, 0.5); }
+            0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(0, 232, 122, 0.2); }
+            50% { transform: scale(1.04); box-shadow: 0 0 50px rgba(0, 232, 122, 0.4); }
         }
 
         body.recording .orb {
-            animation: pulse 1.5s ease-in-out infinite;
+            animation: pulse 1s ease-in-out infinite;
+            background: radial-gradient(circle at 35% 35%, #33ffa0 0%, #00e87a 40%, #007a40 100%);
         }
 
         @keyframes pulse {
-            0%, 100% { transform: scale(1.02); box-shadow: 0 0 40px rgba(0, 232, 122, 0.4); }
-            50% { transform: scale(1.1); box-shadow: 0 0 70px rgba(0, 232, 122, 0.7); }
+            0%, 100% { transform: scale(1.02); box-shadow: 0 0 50px rgba(0, 232, 122, 0.4); }
+            50% { transform: scale(1.08); box-shadow: 0 0 80px rgba(0, 232, 122, 0.7); }
+        }
+
+        /* Agent Label */
+        .agent-label {
+            font-size: 0.8rem;
+            color: var(--muted-color);
+            margin-bottom: 20px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
         }
 
         /* Waves */
         .waves {
             display: flex;
             gap: 4px;
-            height: 40px;
+            height: 30px;
             align-items: center;
-            margin-top: 30px;
+            margin-bottom: 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        body.recording .waves {
+            opacity: 1;
         }
 
         .wave-bar {
@@ -211,13 +138,10 @@
             background-color: var(--accent-color);
             border-radius: 2px;
             height: 4px;
-            opacity: 0.3;
-            transition: height 0.2s ease;
         }
 
         body.recording .wave-bar {
-            opacity: 1;
-            animation: wave 1s ease-in-out infinite alternate;
+            animation: wave 0.8s ease-in-out infinite alternate;
         }
 
         body.recording .wave-bar:nth-child(1) { animation-delay: 0.1s; }
@@ -231,349 +155,170 @@
         body.recording .wave-bar:nth-child(9) { animation-delay: 0.3s; }
 
         @keyframes wave {
-            0% { height: 10px; }
-            100% { height: 40px; }
+            0% { height: 6px; }
+            100% { height: 26px; }
         }
 
+        /* Status & Timer */
         .status-text {
-            margin-top: auto;
-            font-family: 'DM Mono', monospace;
             font-size: 0.9rem;
-            color: var(--muted-color);
-            text-align: center;
-            min-height: 2em;
-        }
-
-        /* Right Panel */
-        .right-panel {
-            flex: 1;
-            overflow-y: auto;
-            padding: 40px;
-        }
-
-        .right-panel::-webkit-scrollbar { width: 8px; }
-        .right-panel::-webkit-scrollbar-track { background: var(--bg-color); }
-        .right-panel::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
-        .right-panel::-webkit-scrollbar-thumb:hover { background: var(--muted-color); }
-
-        /* Status Badge CSS loader */
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-family: 'DM Mono', monospace;
-            font-size: 0.85rem;
-            background: rgba(26, 53, 34, 0.3);
-            border: 1px solid var(--border-color);
-        }
-        
-        .status-processing {
-            color: #ffc107;
-            border-color: rgba(255, 193, 7, 0.3);
-        }
-        
-        .status-success {
-            color: var(--accent-color);
-            border-color: rgba(0, 232, 122, 0.3);
-        }
-        
-        .status-error {
-            color: var(--danger-color);
-            border-color: rgba(255, 85, 85, 0.3);
-        }
-
-        .loading-spinner {
-            width: 14px;
-            height: 14px;
-            border: 2px solid transparent;
-            border-top-color: currentColor;
-            border-left-color: currentColor;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-
-        /* Summary Grid */
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-        }
-
-        .summary-card {
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 20px;
-        }
-
-        .summary-label {
-            font-family: 'DM Mono', monospace;
-            color: var(--muted-color);
-            font-size: 0.8rem;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-        }
-
-        .summary-value {
-            font-size: 1.2rem;
             color: var(--text-color);
+            min-height: 20px;
+            margin-bottom: 5px;
+            text-align: center;
         }
 
-        /* Stage Cards */
-        .stages-container {
+        .timer-text {
+            font-size: 0.85rem;
+            color: var(--accent-color);
+            min-height: 20px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        body.recording .timer-text {
+            opacity: 1;
+        }
+
+        /* Response Output */
+        #voiceOutputSection {
+            margin-top: 30px;
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            min-height: 100px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .stage-card {
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            overflow: hidden;
-            transition: all 0.3s;
-        }
-
-        .stage-card.success { border-left: 4px solid var(--accent-color); }
-        .stage-card.error { border-left: 4px solid var(--danger-color); }
-
-        .stage-header {
-            padding: 16px 20px;
-            display: flex;
-            justify-content: space-between;
             align-items: center;
-            cursor: pointer;
-            user-select: none;
-            background: rgba(255, 255, 255, 0.02);
         }
 
-        .stage-header:hover { background: rgba(255, 255, 255, 0.05); }
-
-        .stage-title { font-size: 1.1rem; font-weight: 500; margin-left: 10px; }
-        .stage-icon { font-size: 1.2rem; }
-        .stage-chevron { font-size: 0.9rem; color: var(--muted-color); transition: transform 0.3s; }
-        
-        .stage-card.collapsed .stage-chevron { transform: rotate(-90deg); }
-        .stage-card.collapsed .stage-content { display: none; }
-
-        .stage-content {
-            padding: 20px;
-            border-top: 1px solid var(--border-color);
+        .response-text {
+            font-size: 1.15rem;
+            line-height: 1.6;
+            color: #ffffff;
+            font-weight: 300;
         }
 
-        .detail-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(26, 53, 34, 0.5);
-            font-size: 0.9rem;
-        }
-
-        .detail-row:last-child { border-bottom: none; }
-        
-        .detail-label {
-            font-family: 'DM Mono', monospace;
-            color: var(--muted-color);
+        /* Audio Player */
+        #audioContainer {
+            margin-top: 25px;
+            width: 100%;
+            max-width: 320px;
         }
         
-        .detail-value {
-            text-align: right;
-            word-break: break-word;
-        }
-
-        /* Text Blocks inside stages */
-        .stage-content > div > strong {
-            display: block;
-            margin-top: 15px;
-            margin-bottom: 10px;
-            font-family: 'DM Mono', monospace;
-            color: var(--muted-color);
-            font-size: 0.9rem;
-            text-transform: uppercase;
-        }
-
-        .stage-content > div > div {
-            background: rgba(0, 0, 0, 0.3) !important;
-            border: 1px solid var(--border-color) !important;
-            border-left: 4px solid var(--accent-color) !important;
-            color: var(--text-color) !important;
-            padding: 15px !important;
-            border-radius: 8px !important;
-            font-size: 0.95rem !important;
-            line-height: 1.6 !important;
-        }
-
-        /* Voice Output */
-        .voice-output-section {
-            background: var(--surface-color);
-            border: 1px solid var(--accent-color);
-            border-radius: 12px;
-            padding: 25px;
-            margin-top: 20px;
-        }
-
-        .voice-output-title {
-            color: var(--accent-color);
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
         audio {
             width: 100%;
             height: 40px;
-            margin-top: 15px;
-            border-radius: 8px;
             outline: none;
+            border-radius: 20px;
         }
         
         audio::-webkit-media-controls-panel {
-            background-color: var(--bg-color);
+            background-color: rgba(255, 255, 255, 0.1);
         }
         audio::-webkit-media-controls-current-time-display,
         audio::-webkit-media-controls-time-remaining-display {
             color: var(--text-color);
         }
 
-        .download-btn {
-            display: inline-block;
-            margin-top: 15px;
-            padding: 8px 16px;
-            background: rgba(0, 232, 122, 0.1);
-            color: var(--accent-color);
-            border: 1px solid var(--accent-color);
-            text-decoration: none;
-            border-radius: 8px;
-            font-family: 'DM Mono', monospace;
-            font-size: 0.9rem;
-            transition: all 0.2s;
+        /* End Call Button */
+        .end-call-btn {
+            position: absolute;
+            bottom: 40px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 85, 85, 0.4);
+            transition: transform 0.2s, background-color 0.2s;
+            z-index: 50;
         }
 
-        .download-btn:hover {
-            background: var(--accent-color);
-            color: var(--bg-color);
+        .end-call-btn:hover {
+            transform: scale(1.05);
+            background-color: #e04444;
         }
 
-        /* Progress (if needed) */
-        .progress-container { display: none; } /* Hiding old progress style, we use spinning badge */
-        .upload-section { display: none; } /* Hiding old file upload */
-        .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        
-        /* Overriding inline styles from JS injection where possible */
-        .detail-value[style*="background: #28a745"] { background: rgba(0, 232, 122, 0.2) !important; color: var(--accent-color) !important; }
-        .detail-value[style*="background: #856404"] { background: rgba(255, 193, 7, 0.2) !important; color: #ffc107 !important; }
+        /* Hide elements meant to be strictly hidden to not break JS */
+        #resultsSection { display: none !important; }
     </style>
 </head>
 <body>
 
-    <!-- Top Nav -->
-    <nav>
-        <div class="brand">
-            BNA Voice Lab
-            <div class="blinking-dot"></div>
-        </div>
-        <div class="nav-pills mono">
-            <span class="pill">STT</span>
-            <span class="pill-arrow">→</span>
-            <span class="pill">Translate</span>
-            <span class="pill-arrow">→</span>
-            <span class="pill">Intent</span>
-            <span class="pill-arrow">→</span>
-            <span class="pill">Agent</span>
-            <span class="pill-arrow">→</span>
-            <span class="pill">KB</span>
-            <span class="pill-arrow">→</span>
-            <span class="pill">TTS</span>
-        </div>
-        <button class="btn-end mono" onclick="endCall()">End Call</button>
-    </nav>
-
-    <div class="main-container">
-        <!-- Left Panel -->
-        <div class="left-panel">
-            <!-- This acts as mic button -->
-            <div class="orb-wrapper" id="mic-button"
-                 onmousedown="startRecording()"
-                 onmouseup="stopRecording()"
-                 onmouseleave="stopRecording()"
-                 ontouchstart="startRecording()"
-                 ontouchend="stopRecording()">
-                <div class="orb-ring"></div>
-                <div class="orb-ring"></div>
-                <div class="orb-ring"></div>
-                <button class="orb">🎤</button>
-            </div>
-
-            <div class="waves">
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-                <div class="wave-bar"></div>
-            </div>
-
-            <div class="status-text mono" id="mic-status">Ready to speak</div>
+    <div class="call-screen">
+        <!-- Orb Mic Button -->
+        <div class="orb-container" id="mic-button"
+             onmousedown="startRecording()"
+             onmouseup="stopRecording()"
+             onmouseleave="stopRecording()"
+             ontouchstart="startRecording()"
+             ontouchend="stopRecording()">
+            <div class="orb-ring"></div>
+            <div class="orb-ring"></div>
+            <div class="orb-ring"></div>
+            <div class="orb"></div>
         </div>
 
-        <!-- Right Panel -->
-        <div class="right-panel">
-            <div id="resultsSection" style="display: none;">
-                <div class="results-header">
-                    <h2>Pipeline Results</h2>
-                    <div id="statusBadge" class="status-badge status-processing">
-                        <div class="loading-spinner"></div>
-                        Processing...
-                    </div>
-                </div>
+        <!-- Agent Label -->
+        <div class="agent-label mono">BNA · Agent IA</div>
 
-                <div class="progress-container">
-                    <div id="progressFill"></div>
-                    <div id="progressText"></div>
-                </div>
+        <!-- Waves -->
+        <div class="waves" id="waves">
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+        </div>
 
-                <div id="summaryGrid" class="summary-grid"></div>
-                <div id="stagesContainer" class="stages-container"></div>
-                
-                <div id="voiceOutputSection" class="voice-output-section" style="display: none;">
-                    <h3 class="voice-output-title">🔊 Final Voice Output</h3>
-                    <div style="margin-bottom: 15px;">
-                        <span class="mono" style="color: var(--muted-color); font-size: 0.9rem;">Localized Response (<span id="detectedLang">Unknown</span>):</span>
-                        <div id="localizedResponse" style="margin-top: 8px; font-size: 1.1rem; line-height: 1.5;">No localized response available</div>
-                    </div>
-                    
-                    <div id="audioContainer" style="display: none;">
-                        <div class="mono" style="color: var(--muted-color); font-size: 0.9rem;">
-                            Model: <span id="audioModel">No audio model</span> | Rate: <span id="sampleRate">Unknown</span>Hz
-                        </div>
-                        <audio id="audioPlayer" controls autoplay>
-                            <source id="audioSource" type="audio/wav">
-                            Your browser does not support the audio element.
-                        </audio>
-                        <br>
-                        <a id="downloadLink" class="download-btn" download="voice_response.wav">
-                            💾 Download Audio
-                        </a>
-                    </div>
-                </div>
-            </div>
+        <!-- Status & Timer -->
+        <div id="mic-status" class="status-text mono">Prêt à écouter...</div>
+        <div id="call-timer" class="timer-text mono">00:00</div>
+
+        <!-- Output Section -->
+        <div id="voiceOutputSection" style="display: none;">
+            <div id="localizedResponse" class="response-text"></div>
             
-            <!-- Hidden inputs to keep JS working -->
-            <input type="file" id="audioInput" style="display: none;">
+            <div id="audioContainer" style="display: none;">
+                <audio id="audioPlayer" controls autoplay>
+                    <source id="audioSource" type="audio/wav">
+                </audio>
+                
+                <!-- Hidden components to keep JS references valid without visual clutter -->
+                <div style="display: none;">
+                    <span id="detectedLang"></span>
+                    <span id="audioModel"></span>
+                    <span id="sampleRate"></span>
+                    <a id="downloadLink"></a>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- Fixed Bottom End Call -->
+    <button class="end-call-btn" onclick="endCall()">📵</button>
+
+    <!-- Hidden dummy elements to preserve JS stability (e.g. innerHTML writes in displayResults) -->
+    <div id="resultsSection">
+        <div id="statusBadge"></div>
+        <div id="progressFill"></div>
+        <div id="progressText"></div>
+        <div id="summaryGrid"></div>
+        <div id="stagesContainer"></div>
+    </div>
+    <input type="file" id="audioInput" style="display: none;">
+
     <script>
+
 
         // WebSocket Audio Streaming (Phase 1)
         let ws = null;
@@ -1226,6 +971,70 @@
             `;
         }
     
+    
+
+        // Additional Logic for the new UI elements
+        (function() {
+            let callInterval;
+            let callSeconds = 0;
+
+            function formatTime(s) {
+                const mins = Math.floor(s / 60);
+                const secs = s % 60;
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            const timerEl = document.getElementById('call-timer');
+            const orbBtn = document.getElementById('mic-button');
+            const voSection = document.getElementById('voiceOutputSection');
+            const locResp = document.getElementById('localizedResponse');
+
+            function startTimerUI() {
+                callSeconds = 0;
+                timerEl.textContent = '00:00';
+                
+                // Fade out previous response
+                voSection.style.opacity = '0';
+                setTimeout(() => {
+                    if(voSection.style.opacity === '0') {
+                        voSection.style.display = 'none';
+                        locResp.textContent = '';
+                    }
+                }, 500);
+
+                clearInterval(callInterval);
+                callInterval = setInterval(() => {
+                    callSeconds++;
+                    timerEl.textContent = formatTime(callSeconds);
+                }, 1000);
+            }
+
+            function stopTimerUI() {
+                clearInterval(callInterval);
+            }
+
+            orbBtn.addEventListener('mousedown', startTimerUI);
+            orbBtn.addEventListener('touchstart', startTimerUI);
+
+            orbBtn.addEventListener('mouseup', stopTimerUI);
+            orbBtn.addEventListener('mouseleave', stopTimerUI);
+            orbBtn.addEventListener('touchend', stopTimerUI);
+
+            // Fade in response seamlessly when displayVoiceOutput is called
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.attributeName === 'style') {
+                        const display = mutation.target.style.display;
+                        if (display === 'flex' || display === 'block') {
+                            setTimeout(() => {
+                                mutation.target.style.opacity = '1';
+                            }, 10);
+                        }
+                    }
+                });
+            });
+            observer.observe(voSection, { attributes: true });
+        })();
     </script>
 </body>
 </html>
