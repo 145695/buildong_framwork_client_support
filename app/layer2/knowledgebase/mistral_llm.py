@@ -5,6 +5,8 @@ Mistral LLM implementation for the knowledge base
 import os
 import requests
 import logging
+import time
+import random
 from pathlib import Path
 from typing import Optional
 
@@ -42,37 +44,65 @@ class MistralLLM:
     
     async def ainvoke(self, prompt: str) -> 'MistralResponse':
         """Generate response using Mistral API"""
-        try:
-            payload = {
-                "model": self.model_name,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "temperature": self.temperature,
-                "max_tokens": 1024
-            }
-            
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=self.headers,
-                json=payload,
-                timeout=60  # Increased timeout to 60 seconds
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                content = data["choices"][0]["message"]["content"]
-                return MistralResponse(content)
-            else:
-                logger.error(f"Mistral API error: {response.status_code} - {response.text}")
-                raise Exception(f"Mistral API error: {response.status_code}")
-                
-        except Exception as e:
-            logger.error(f"Error calling Mistral API: {e}")
-            raise
+        max_retries = 5
+        last_exception = None
+
+        for attempt in range(max_retries):
+            try:
+                payload = {
+                    "model": self.model_name,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "temperature": self.temperature,
+                    "max_tokens": 1024
+                }
+
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
+                    json=payload,
+                    timeout=60  # Increased timeout to 60 seconds
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    content = data["choices"][0]["message"]["content"]
+                    return MistralResponse(content)
+                elif response.status_code == 429:
+                    error_msg = f"Mistral API error: {response.status_code} - {response.text}"
+                    logger.error(error_msg)
+                    last_exception = Exception(error_msg)
+                    # Retry with exponential backoff
+                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    print(f"⏳ Mistral free tier busy, retrying in {wait_time:.1f}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    error_msg = f"Mistral API error: {response.status_code} - {response.text}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "capacity exceeded" in error_str.lower():
+                    logger.error(f"Error calling Mistral API: {e}")
+                    last_exception = e
+                    # Retry with exponential backoff
+                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    print(f"⏳ Mistral free tier busy, retrying in {wait_time:.1f}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Error calling Mistral API: {e}")
+                    raise
+
+        # All retries failed
+        if last_exception:
+            raise last_exception
+        else:
+            raise Exception("Mistral API: All retries failed")
     
     def test_connection(self) -> bool:
         """Test Mistral API connection"""

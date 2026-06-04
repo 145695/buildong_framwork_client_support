@@ -1001,7 +1001,7 @@ Answer only: YES (keep) or NO (discard)"""
                 query_tokens = set(re.findall(r"\w{3,}", question.lower()))
                 wants_tariffs = any(t in query_tokens for t in ["tarif", "tarifs", "frais", "commission", "abonnement", "coût", "cout"])
                 wants_rates = any(t in query_tokens for t in ["taux", "intérêt", "interet", "%", "teg"])
-                wants_credit = any(t in query_tokens for t in ["crédit", "credit", "prêt", "pret", "immobilier", "financement"])
+                wants_credit = any(t in query_tokens for t in ["crédit", "credit", "prêt", "pret", "immobilier", "financement", "mortgage", "loan", "emprunt", "hypothèque", "hypothecaire"])
 
                 preferred_types = None
                 if wants_tariffs:
@@ -1019,7 +1019,11 @@ Answer only: YES (keep) or NO (discard)"""
                         if doc_type and doc_type not in preferred_types:
                             continue
                     text_lower = (ch.get("content") or "").lower()
+                    filename = (ch.get("filename") or "").lower()
                     hits = sum(1 for t in query_tokens if t in text_lower)
+                    # Boost BNA_RAG_QA for credit/loan queries as it contains the most important information
+                    if wants_credit and "bna_rag_qa" in filename:
+                        hits += 5  # Strong boost for BNA_RAG_QA
                     if hits > 0:
                         scored.append((hits, ch))
 
