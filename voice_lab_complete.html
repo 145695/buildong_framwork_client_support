@@ -9,26 +9,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #FAFAF8;
-            --accent-color: #4CAF50;
-            --accent-active: #2E7D32;
-            --text-color: #333333;
-            --muted-color: #666666;
-            --danger-color: #ff5555;
+            --bg-color: #F0F4F1;
+            --accent-color: #3DAA60;
+            --accent-light: #6DCFA0;
+            --accent-dark: #1B6B3A;
+            --text-color: #1a2e22;
+            --muted-color: #5a7a65;
+            --danger-color: #e05555;
             --warning-color: #ffc107;
-            --bubble-idle: #4CAF50;
-            --bubble-active: #2E7D32;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Bricolage Grotesque', sans-serif;
-            background-color: var(--bg-color);
+            background: radial-gradient(ellipse at 60% 20%, #d8f0e4 0%, #eaf5ee 40%, #F0F4F1 100%);
             color: var(--text-color);
             height: 100vh;
             overflow: hidden;
@@ -37,13 +32,54 @@
             align-items: center;
             justify-content: center;
             position: relative;
-            transition: background-color 0.5s ease;
         }
 
-        .mono {
-            font-family: 'DM Mono', monospace;
+        .mono { font-family: 'DM Mono', monospace; }
+
+        /* ── TOP-LEFT END CALL BUTTON ── */
+        .end-call-btn {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 50px;
+            background: rgba(255,255,255,0.55);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(224, 85, 85, 0.25);
+            color: var(--danger-color);
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow:
+                0 4px 24px rgba(0,0,0,0.07),
+                inset 0 1px 0 rgba(255,255,255,0.8);
+            transition: all 0.25s ease;
+            z-index: 100;
+            letter-spacing: 0.3px;
         }
 
+        .end-call-btn:hover {
+            background: rgba(224, 85, 85, 0.12);
+            border-color: rgba(224, 85, 85, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 28px rgba(224,85,85,0.15), inset 0 1px 0 rgba(255,255,255,0.8);
+        }
+
+        .end-call-btn:active { transform: translateY(0); }
+
+        .end-call-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger-color);
+        }
+
+        /* ── MAIN LAYOUT ── */
         .call-screen {
             display: flex;
             flex-direction: column;
@@ -53,342 +89,399 @@
             max-width: 600px;
             padding: 20px;
             height: 100%;
-            padding-bottom: 80px;
+            padding-bottom: 120px;
+            position: relative;
+            z-index: 1;
         }
 
-        /* Orb and Rings */
+        /* ── GLASS ORB ── */
         .orb-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            margin-bottom: 16px;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        /* Ripple rings */
+        .orb-ring {
+            position: absolute;
+            width: 230px;
+            height: 230px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(61, 170, 96, 0.35);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        body.recording .orb-ring:nth-child(1) { animation: ringPulse 2s ease-out infinite 0s; }
+        body.recording .orb-ring:nth-child(2) { animation: ringPulse 2s ease-out infinite 0.65s; }
+        body.recording .orb-ring:nth-child(3) { animation: ringPulse 2s ease-out infinite 1.3s; }
+
+        body.speaking .orb-ring:nth-child(1) { animation: ringPulseBig 1.2s ease-out infinite 0s; }
+        body.speaking .orb-ring:nth-child(2) { animation: ringPulseBig 1.2s ease-out infinite 0.4s; }
+        body.speaking .orb-ring:nth-child(3) { animation: ringPulseBig 1.2s ease-out infinite 0.8s; }
+
+        @keyframes ringPulse {
+            0%   { transform: scale(0.9); opacity: 0.6; }
+            100% { transform: scale(1.75); opacity: 0; }
+        }
+        @keyframes ringPulseBig {
+            0%   { transform: scale(0.9); opacity: 0.8; border-color: rgba(109, 207, 160, 0.5); }
+            100% { transform: scale(2.2);  opacity: 0; }
+        }
+
+        /* THE GLASS ORB */
+        .orb {
             position: relative;
             width: 220px;
             height: 220px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            margin-bottom: 10px;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .orb-ring {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 3px solid rgba(76, 175, 80, 0.3);
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        body.recording .orb-ring:nth-child(1) { animation: expandRing 2s infinite 0s; }
-        body.recording .orb-ring:nth-child(2) { animation: expandRing 2s infinite 0.6s; }
-        body.recording .orb-ring:nth-child(3) { animation: expandRing 2s infinite 1.2s; }
-
-        @keyframes expandRing {
-            0% { transform: scale(0.9); opacity: 0.6; }
-            100% { transform: scale(1.8); opacity: 0; }
-        }
-
-        .orb {
-            position: relative;
-            width: 160px;
-            height: 160px;
             border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%;
-            background: radial-gradient(circle at 35% 35%, var(--bubble-idle) 0%, #388E3C 50%, #1B5E20 100%);
-            box-shadow: 0 8px 32px rgba(76, 175, 80, 0.3), inset 0 0 20px rgba(255,255,255,0.3);
-            animation: breathe 3s ease-in-out infinite, float 4s ease-in-out infinite, flowy 8s ease-in-out infinite;
             z-index: 10;
-            transition: all 0.5s ease;
+            transition: filter 0.5s ease;
+
+            /* Glass layers — order matters */
+            background:
+                /* specular rim */
+                radial-gradient(ellipse 60% 25% at 68% 78%, rgba(255,255,255,0.18) 0%, transparent 70%),
+                /* main body glass tint */
+                radial-gradient(ellipse 90% 90% at 40% 38%,
+                    rgba(120, 230, 160, 0.82) 0%,
+                    rgba(60, 180, 100, 0.75) 30%,
+                    rgba(20, 110, 55, 0.88) 65%,
+                    rgba(10, 60, 30, 0.92) 100%
+                );
+
+            box-shadow:
+                /* outer glow */
+                0 0 60px rgba(61, 170, 96, 0.28),
+                0 16px 48px rgba(0,0,0,0.14),
+                /* inner top-left highlight */
+                inset 4px 6px 18px rgba(255,255,255,0.55),
+                /* inner bottom-right shadow */
+                inset -6px -8px 24px rgba(0, 40, 15, 0.35),
+                /* rim light */
+                inset 0 0 0 1px rgba(255,255,255,0.2);
+
+            animation: blobIdle 6s ease-in-out infinite, floatOrb 5s ease-in-out infinite;
         }
 
-        @keyframes breathe {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+        /* Primary specular highlight — the "glass lens" look */
+        .orb::before {
+            content: '';
+            position: absolute;
+            top: 10%;
+            left: 14%;
+            width: 42%;
+            height: 28%;
+            background: radial-gradient(ellipse, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.1) 60%, transparent 100%);
+            border-radius: 50%;
+            transform: rotate(-20deg);
+            pointer-events: none;
+            z-index: 11;
         }
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
+        /* Secondary caustic shimmer */
+        .orb::after {
+            content: '';
+            position: absolute;
+            bottom: 18%;
+            right: 16%;
+            width: 22%;
+            height: 12%;
+            background: radial-gradient(ellipse, rgba(180,255,210,0.5) 0%, transparent 80%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 11;
+            animation: caustic 3s ease-in-out infinite alternate;
         }
 
-        @keyframes flowy {
-            0% { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; }
-            20% { border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%; }
-            40% { border-radius: 50% 50% 60% 40% / 40% 60% 50% 50%; }
-            60% { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
-            80% { border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%; }
+        @keyframes caustic {
+            0%   { opacity: 0.4; transform: scale(1) rotate(0deg); }
+            100% { opacity: 0.9; transform: scale(1.3) rotate(15deg); }
+        }
+
+        /* Blob shape morphing — the flowy thing */
+        @keyframes blobIdle {
+            0%   { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; }
+            16%  { border-radius: 42% 58% 34% 66% / 60% 34% 66% 40%; }
+            33%  { border-radius: 55% 45% 62% 38% / 42% 58% 42% 58%; }
+            50%  { border-radius: 35% 65% 68% 32% / 38% 32% 68% 62%; }
+            66%  { border-radius: 70% 30% 38% 62% / 65% 70% 30% 35%; }
+            83%  { border-radius: 48% 52% 44% 56% / 56% 44% 56% 44%; }
             100% { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; }
         }
 
+        @keyframes floatOrb {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50%       { transform: translateY(-12px) scale(1.02); }
+        }
+
+        /* RECORDING state */
         body.recording .orb {
-            animation: pulse 1.5s ease-in-out infinite, flowy 4s ease-in-out infinite;
-            background: radial-gradient(circle at 35% 35%, var(--bubble-active) 0%, #388E3C 40%, #1B5E20 100%);
-            box-shadow: 0 12px 40px rgba(46, 125, 50, 0.5), inset 0 0 20px rgba(255,255,255,0.4);
+            background:
+                radial-gradient(ellipse 60% 25% at 68% 78%, rgba(255,255,255,0.22) 0%, transparent 70%),
+                radial-gradient(ellipse 90% 90% at 40% 38%,
+                    rgba(160, 255, 190, 0.88) 0%,
+                    rgba(80, 210, 120, 0.80) 30%,
+                    rgba(30, 140, 70, 0.90) 65%,
+                    rgba(10, 70, 35, 0.94) 100%
+                );
+            box-shadow:
+                0 0 80px rgba(61, 200, 100, 0.4),
+                0 16px 48px rgba(0,0,0,0.14),
+                inset 4px 6px 18px rgba(255,255,255,0.65),
+                inset -6px -8px 24px rgba(0, 40, 15, 0.3),
+                inset 0 0 0 1px rgba(255,255,255,0.25);
+            animation: blobRecord 3s ease-in-out infinite, floatOrbRecord 2.5s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+        @keyframes blobRecord {
+            0%   { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; transform: scale(1.02); }
+            25%  { border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%; transform: scale(1.06); }
+            50%  { border-radius: 55% 45% 65% 35% / 45% 60% 40% 55%; transform: scale(1.04); }
+            75%  { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; transform: scale(1.07); }
+            100% { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; transform: scale(1.02); }
         }
 
+        @keyframes floatOrbRecord {
+            0%, 100% { transform: translateY(-4px); }
+            50%       { transform: translateY(-16px); }
+        }
+
+        /* SPEAKING state */
         body.speaking .orb {
-            animation: morph 0.3s ease-in-out infinite alternate, flowy 2s ease-in-out infinite;
-            background: radial-gradient(circle at 35% 35%, var(--bubble-active) 0%, #388E3C 40%, #2E7D32 100%);
+            background:
+                radial-gradient(ellipse 60% 25% at 68% 78%, rgba(255,255,255,0.28) 0%, transparent 70%),
+                radial-gradient(ellipse 90% 90% at 40% 38%,
+                    rgba(200, 255, 220, 0.92) 0%,
+                    rgba(100, 230, 140, 0.85) 25%,
+                    rgba(40, 170, 85, 0.90) 60%,
+                    rgba(15, 80, 40, 0.95) 100%
+                );
+            box-shadow:
+                0 0 100px rgba(61, 220, 110, 0.55),
+                0 16px 60px rgba(0,0,0,0.12),
+                inset 4px 6px 20px rgba(255,255,255,0.75),
+                inset -6px -8px 28px rgba(0, 40, 15, 0.25),
+                inset 0 0 0 1.5px rgba(255,255,255,0.35);
+            animation: blobSpeak 1.8s ease-in-out infinite, floatOrbSpeak 1.4s ease-in-out infinite;
         }
 
-        @keyframes morph {
-            0% { transform: scale(1); border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; }
-            25% { transform: scale(1.15); border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%; }
-            50% { transform: scale(1.2); border-radius: 50% 50% 60% 40% / 40% 60% 50% 50%; }
-            75% { transform: scale(1.15); border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
-            100% { transform: scale(1.2); border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%; }
+        @keyframes blobSpeak {
+            0%   { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; transform: scale(1.04); }
+            20%  { border-radius: 38% 62% 32% 68% / 62% 32% 68% 38%; transform: scale(1.10); }
+            40%  { border-radius: 58% 42% 66% 34% / 40% 62% 38% 60%; transform: scale(1.07); }
+            60%  { border-radius: 32% 68% 72% 28% / 32% 28% 72% 68%; transform: scale(1.12); }
+            80%  { border-radius: 72% 28% 36% 64% / 68% 72% 28% 32%; transform: scale(1.08); }
+            100% { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; transform: scale(1.04); }
         }
 
-        /* Waiting state for followup */
+        @keyframes floatOrbSpeak {
+            0%, 100% { transform: translateY(-6px); }
+            50%       { transform: translateY(-18px); }
+        }
+
+        /* WAITING (followup) */
         .orb-container.waiting .orb {
-            animation: pulse-waiting 2s ease-in-out infinite;
-            background: radial-gradient(circle at 35% 35%, #ffc107 0%, #ff9800 50%, #e65100 100%);
-            box-shadow: 0 0 40px rgba(255, 193, 7, 0.4);
-        }
-        @keyframes pulse-waiting {
-            0%, 100% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.03); opacity: 1; }
-        }
-
-        /* Agent Label */
-        .agent-label {
-            font-size: 0.8rem;
-            color: var(--muted-color);
-            margin-bottom: 20px;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
+            background:
+                radial-gradient(ellipse 60% 25% at 68% 78%, rgba(255,255,255,0.2) 0%, transparent 70%),
+                radial-gradient(ellipse 90% 90% at 40% 38%,
+                    rgba(255, 230, 100, 0.88) 0%,
+                    rgba(255, 160, 30, 0.82) 45%,
+                    rgba(180, 80, 0, 0.92) 100%
+                );
+            box-shadow:
+                0 0 70px rgba(255, 193, 7, 0.38),
+                0 16px 48px rgba(0,0,0,0.14),
+                inset 4px 6px 18px rgba(255,255,255,0.5),
+                inset -6px -8px 24px rgba(80, 30, 0, 0.3),
+                inset 0 0 0 1px rgba(255,255,255,0.2);
+            animation: blobIdle 4s ease-in-out infinite;
         }
 
-        /* Waves */
+        /* ── WAVEFORM ── */
         .waves {
             display: flex;
             gap: 6px;
-            height: 120px;
+            height: 80px;
             align-items: center;
             justify-content: center;
-            margin-bottom: 20px;
-            opacity: 0;
-            transition: opacity 0.5s ease;
-            position: relative;
-        }
-
-        body.recording .waves {
-            opacity: 1;
+            margin-bottom: 24px;
+            transition: opacity 0.4s ease;
         }
 
         .wave-bar {
-            width: 8px;
-            background: linear-gradient(to top, var(--accent-color), var(--accent-active));
+            width: 7px;
+            background: linear-gradient(to top, #2E7D32, #66BB6A);
             border-radius: 10px;
-            height: 10px;
+            height: 8px;
             transition: height 0.1s ease;
         }
 
-        body.recording .wave-bar {
-            animation: wave 0.6s ease-in-out infinite alternate;
+        body:not(.recording):not(.speaking) .wave-bar {
+            animation: waveIdle 2.5s ease-in-out infinite alternate;
         }
+        body:not(.recording):not(.speaking) .wave-bar:nth-child(odd)  { animation-delay: 0.3s; }
+        body:not(.recording):not(.speaking) .wave-bar:nth-child(even) { animation-delay: 0.8s; }
+        @keyframes waveIdle { 0% { height: 5px; } 100% { height: 14px; } }
 
-        body.recording .wave-bar:nth-child(1) { animation-delay: 0.05s; }
-        body.recording .wave-bar:nth-child(2) { animation-delay: 0.1s; }
-        body.recording .wave-bar:nth-child(3) { animation-delay: 0.15s; }
-        body.recording .wave-bar:nth-child(4) { animation-delay: 0.2s; }
-        body.recording .wave-bar:nth-child(5) { animation-delay: 0.25s; }
-        body.recording .wave-bar:nth-child(6) { animation-delay: 0.3s; }
-        body.recording .wave-bar:nth-child(7) { animation-delay: 0.35s; }
-        body.recording .wave-bar:nth-child(8) { animation-delay: 0.4s; }
-        body.recording .wave-bar:nth-child(9) { animation-delay: 0.45s; }
+        body.recording .wave-bar { animation: waveActive 0.55s ease-in-out infinite alternate; }
+        body.recording .wave-bar:nth-child(1)  { animation-delay: 0.00s; animation-duration: 0.50s; }
+        body.recording .wave-bar:nth-child(2)  { animation-delay: 0.07s; animation-duration: 0.44s; }
+        body.recording .wave-bar:nth-child(3)  { animation-delay: 0.13s; animation-duration: 0.60s; }
+        body.recording .wave-bar:nth-child(4)  { animation-delay: 0.04s; animation-duration: 0.42s; }
+        body.recording .wave-bar:nth-child(5)  { animation-delay: 0.19s; animation-duration: 0.56s; }
+        body.recording .wave-bar:nth-child(6)  { animation-delay: 0.02s; animation-duration: 0.48s; }
+        body.recording .wave-bar:nth-child(7)  { animation-delay: 0.17s; animation-duration: 0.63s; }
+        body.recording .wave-bar:nth-child(8)  { animation-delay: 0.09s; animation-duration: 0.40s; }
+        body.recording .wave-bar:nth-child(9)  { animation-delay: 0.24s; animation-duration: 0.54s; }
+        body.recording .wave-bar:nth-child(10) { animation-delay: 0.05s; animation-duration: 0.46s; }
+        body.recording .wave-bar:nth-child(11) { animation-delay: 0.15s; animation-duration: 0.58s; }
+        @keyframes waveActive { 0% { height: 8px; } 100% { height: 66px; } }
 
-        @keyframes wave {
-            0% { height: 15px; }
-            100% { height: 100px; }
+        body.speaking .wave-bar {
+            background: linear-gradient(to top, #1B5E20, #A5D6A7);
+            animation: waveSpeak 0.32s ease-in-out infinite alternate;
         }
+        body.speaking .wave-bar:nth-child(1)  { animation-delay: 0.00s; animation-duration: 0.28s; }
+        body.speaking .wave-bar:nth-child(2)  { animation-delay: 0.04s; animation-duration: 0.26s; }
+        body.speaking .wave-bar:nth-child(3)  { animation-delay: 0.09s; animation-duration: 0.36s; }
+        body.speaking .wave-bar:nth-child(4)  { animation-delay: 0.03s; animation-duration: 0.24s; }
+        body.speaking .wave-bar:nth-child(5)  { animation-delay: 0.14s; animation-duration: 0.32s; }
+        body.speaking .wave-bar:nth-child(6)  { animation-delay: 0.01s; animation-duration: 0.30s; }
+        body.speaking .wave-bar:nth-child(7)  { animation-delay: 0.11s; animation-duration: 0.38s; }
+        body.speaking .wave-bar:nth-child(8)  { animation-delay: 0.06s; animation-duration: 0.23s; }
+        body.speaking .wave-bar:nth-child(9)  { animation-delay: 0.17s; animation-duration: 0.31s; }
+        body.speaking .wave-bar:nth-child(10) { animation-delay: 0.04s; animation-duration: 0.27s; }
+        body.speaking .wave-bar:nth-child(11) { animation-delay: 0.10s; animation-duration: 0.35s; }
+        @keyframes waveSpeak { 0% { height: 10px; } 100% { height: 72px; } }
 
-        /* Status & Timer */
-        .status-text {
-            font-size: 0.9rem;
-            color: var(--text-color);
-            min-height: 20px;
-            margin-bottom: 5px;
-            text-align: center;
-            transition: color 0.3s;
-        }
-
-        .timer-text {
-            font-size: 0.85rem;
-            color: var(--accent-color);
-            min-height: 20px;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        
-        body.recording .timer-text {
-            opacity: 1;
-        }
-
-        /* Response Output */
-        #voiceOutputSection {
-            margin-top: 30px;
-            text-align: center;
-            width: 100%;
-            max-width: 500px;
-            opacity: 0;
-            transition: opacity 0.5s ease-in-out;
-            min-height: 100px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .response-text {
-            font-size: 1.15rem;
-            line-height: 1.6;
-            color: #ffffff;
-            font-weight: 300;
-        }
-
-        /* Audio Player - Hidden but Functional */
-        #audioContainer {
-            position: absolute;
-            width: 0;
-            height: 0;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-        }
-        
-        audio {
-            width: 0;
-            height: 0;
-            display: none;
-        }
-
-        /* End Call Button */
-        .end-call-btn {
-            position: absolute;
-            bottom: 40px;
-            padding: 14px 32px;
-            border-radius: 50px;
-            background-color: white;
-            color: var(--danger-color);
-            border: 2px solid var(--danger-color);
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-            transition: all 0.3s ease;
-            z-index: 50;
-        }
-
-        .end-call-btn:hover {
-            background-color: var(--danger-color);
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 85, 85, 0.3);
-        }
-
-        /* Record Button (Pill Shape) */
+        /* ── GLASSY RECORD BUTTON ── */
         .record-btn {
-            position: absolute;
-            bottom: 120px;
-            padding: 16px 32px;
-            border-radius: 50px;
-            background-color: white;
+            position: fixed;
+            bottom: 36px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 16px 40px;
+            border-radius: 100px;
+            background: rgba(255, 255, 255, 0.52);
+            backdrop-filter: blur(20px) saturate(200%);
+            -webkit-backdrop-filter: blur(20px) saturate(200%);
+            border: 1px solid rgba(255, 255, 255, 0.75);
             color: var(--text-color);
-            border: 2px solid #e0e0e0;
-            font-size: 16px;
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 0.95rem;
             font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
-            transition: all 0.3s ease;
+            letter-spacing: 0.3px;
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.10),
+                0 2px 8px rgba(0,0,0,0.06),
+                inset 0 1px 0 rgba(255,255,255,0.9),
+                inset 0 -1px 0 rgba(0,0,0,0.05);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             z-index: 50;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            white-space: nowrap;
         }
 
         .record-btn:hover {
-            background-color: #f8f8f8;
-            border-color: #d0d0d0;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+            transform: translateX(-50%) translateY(-2px) scale(1.02);
+            box-shadow:
+                0 12px 40px rgba(0,0,0,0.13),
+                0 4px 12px rgba(0,0,0,0.08),
+                inset 0 1px 0 rgba(255,255,255,0.95),
+                inset 0 -1px 0 rgba(0,0,0,0.04);
         }
 
         .record-btn:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            transform: translateX(-50%) scale(0.97);
         }
 
-        .record-btn.recording {
-            background-color: white;
-            color: var(--accent-color);
-            border-color: var(--accent-color);
-            box-shadow: 0 4px 20px rgba(76, 175, 80, 0.2);
+        /* Recording state — glassy green tint */
+        body.recording .record-btn {
+            background: rgba(61, 170, 96, 0.22);
+            border-color: rgba(61, 170, 96, 0.45);
+            color: var(--accent-dark);
+            box-shadow:
+                0 8px 32px rgba(61, 170, 96, 0.25),
+                inset 0 1px 0 rgba(255,255,255,0.8),
+                inset 0 -1px 0 rgba(0, 60, 20, 0.08);
         }
 
-        .record-btn.recording:hover {
-            background-color: var(--accent-color);
-            color: white;
-            border-color: var(--accent-color);
-            box-shadow: 0 6px 25px rgba(76, 175, 80, 0.3);
+        .record-icon {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--muted-color);
+            transition: background 0.3s, box-shadow 0.3s;
+            flex-shrink: 0;
         }
 
-        /* Particle Background */
+        body.recording .record-icon {
+            background: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(61, 170, 96, 0.25);
+            animation: iconBlink 1s ease-in-out infinite;
+        }
+
+        @keyframes iconBlink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.4; }
+        }
+
+        /* ── PARTICLES ── */
         .particles {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            inset: 0;
             pointer-events: none;
-            overflow: hidden;
             z-index: 0;
+            overflow: hidden;
         }
 
         .particle {
             position: absolute;
-            width: 6px;
-            height: 6px;
-            background-color: rgba(76, 175, 80, 0.3);
             border-radius: 50%;
-            animation: floatParticle 15s infinite linear;
+            background: rgba(61, 170, 96, 0.25);
+            animation: floatP var(--dur) linear var(--delay) infinite;
         }
 
-        @keyframes floatParticle {
-            0% {
-                transform: translateY(100vh) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            90% {
-                opacity: 1;
-            }
-            100% {
-                transform: translateY(-100vh) rotate(720deg);
-                opacity: 0;
-            }
+        @keyframes floatP {
+            0%   { transform: translateY(105vh) scale(0); opacity: 0; }
+            8%   { opacity: 1; }
+            92%  { opacity: 0.6; }
+            100% { transform: translateY(-10vh) scale(1.2); opacity: 0; }
         }
 
-        /* Minimal voice-call UI: keep only the orb/waves + end-call button */
+        /* ── HIDDEN COMPAT ELEMENTS ── */
         #voiceOutputSection { display: none !important; visibility: hidden !important; }
-        #resultsSection { display: none !important; visibility: hidden !important; }
-        .agent-label { display: none !important; }
-        #mic-status { display: none !important; }
-        #call-timer { display: none !important; }
-        /* Keep audio container in DOM but invisible */
-        #audioContainer { position: absolute; width: 0; height: 0; opacity: 0; visibility: hidden; pointer-events: none; }
+        #resultsSection     { display: none !important; visibility: hidden !important; }
+        .agent-label        { display: none !important; }
+        #mic-status         { display: none !important; }
+        #call-timer         { display: none !important; }
+        #audioContainer     { position: absolute; width: 0; height: 0; opacity: 0; visibility: hidden; pointer-events: none; }
     </style>
 </head>
 <body>
-    <!-- Particle Background -->
+
     <div class="particles" id="particles"></div>
 
+    <!-- TOP-LEFT END CALL -->
+    <button class="end-call-btn" onclick="endCall()">
+        <div class="end-call-dot"></div>
+        End call
+    </button>
+
     <div class="call-screen">
+
+        <!-- ORB -->
         <div class="orb-container" id="mic-button"
              onmousedown="startRecording()"
              onmouseup="stopRecording()"
@@ -401,9 +494,9 @@
             <div class="orb"></div>
         </div>
 
-        <div class="agent-label mono">BNA · Agent IA</div>
-
+        <!-- WAVEFORM -->
         <div class="waves" id="waves">
+            <div class="wave-bar"></div><div class="wave-bar"></div>
             <div class="wave-bar"></div><div class="wave-bar"></div>
             <div class="wave-bar"></div><div class="wave-bar"></div>
             <div class="wave-bar"></div><div class="wave-bar"></div>
@@ -411,28 +504,17 @@
             <div class="wave-bar"></div>
         </div>
 
-        <div id="mic-status" class="status-text mono">Prêt à écouter...</div>
+        <!-- Hidden compat elements -->
+        <div id="mic-status" class="mono" style="display:none;"></div>
+        <div id="call-timer" class="mono" style="display:none;"></div>
 
-        <!-- New Record Button (Pill Shape) -->
-        <button class="record-btn" id="record-btn"
-                onmousedown="startRecording()"
-                onmouseup="stopRecording()"
-                onmouseleave="stopRecording()"
-                ontouchstart="startRecording()"
-                ontouchend="stopRecording()">
-            <span id="record-label">Hold to speak</span>
-        </button>
-        <div id="call-timer" class="timer-text mono">00:00</div>
-
-        <div id="voiceOutputSection" style="display: none;">
-            <div id="localizedResponse" class="response-text"></div>
-            
-            <div id="audioContainer" style="display: none;">
+        <div id="voiceOutputSection" style="display:none;">
+            <div id="localizedResponse"></div>
+            <div id="audioContainer" style="display:none;">
                 <audio id="audioPlayer" controls autoplay>
                     <source id="audioSource" type="audio/wav">
                 </audio>
-                
-                <div style="display: none;">
+                <div style="display:none;">
                     <span id="detectedLang"></span>
                     <span id="audioModel"></span>
                     <span id="sampleRate"></span>
@@ -442,39 +524,49 @@
         </div>
     </div>
 
-    <button class="end-call-btn" onclick="endCall()">End Call</button>
+    <!-- BOTTOM GLASS RECORD BUTTON -->
+    <button class="record-btn" id="record-btn"
+            onmousedown="startRecording()"
+            onmouseup="stopRecording()"
+            onmouseleave="stopRecording()"
+            ontouchstart="startRecording()"
+            ontouchend="stopRecording()">
+        <div class="record-icon"></div>
+        <span id="record-label">Hold to speak</span>
+    </button>
 
-    <div id="resultsSection">
+    <!-- Hidden results section (compat) -->
+    <div id="resultsSection" style="display:none;">
         <div id="statusBadge"></div>
         <div id="progressFill"></div>
         <div id="progressText"></div>
         <div id="summaryGrid"></div>
         <div id="stagesContainer"></div>
     </div>
-    <input type="file" id="audioInput" style="display: none;">
+    <input type="file" id="audioInput" style="display:none;">
 
     <script>
-        // --- PARTICLE SYSTEM ---
-        function createParticles() {
-            const particlesContainer = document.getElementById('particles');
-            const particleCount = 20;
-
-            for (let i = 0; i < particleCount; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 15 + 's';
-                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
-                particle.style.width = (4 + Math.random() * 4) + 'px';
-                particle.style.height = particle.style.width;
-                particlesContainer.appendChild(particle);
+        // ── PARTICLES ──────────────────────────────────────────────────
+        (function() {
+            const c = document.getElementById('particles');
+            for (let i = 0; i < 22; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const size = 3 + Math.random() * 5;
+                p.style.cssText = `
+                    left:${Math.random()*100}%;
+                    width:${size}px; height:${size}px;
+                    --dur:${10 + Math.random()*12}s;
+                    --delay:${Math.random()*12}s;
+                `;
+                c.appendChild(p);
             }
-        }
+        })();
 
-        // Initialize particles on load
-        window.addEventListener('load', createParticles);
+        // ── STATUS HELPER (silent — multilingual UI) ──────────────────
+        function setStatus(text) { /* intentionally empty */ }
 
-        // --- INJECTED PROXIES & LOGIC ---
+        // ── INJECTED PROXIES & LOGIC ───────────────────────────────────
         const MINIMAL_CALL_UI = true;
         window.isFollowupMode = false;
         window.followupRetries = 0;
@@ -491,8 +583,7 @@
             originalSend.call(this, data);
         };
 
-
-        // WebSocket Audio Streaming (Phase 1)
+        // ── WEBSOCKET AUDIO STREAMING ──────────────────────────────────
         let ws = null;
         let audioContext = null;
         let processor = null;
@@ -502,733 +593,230 @@
 
         async function startRecording() {
             if (isRecording) return;
-            
-            // Ensure session_id is set before recording
             if (!sessionId) {
                 console.error('[Session] No session_id available');
-                updateMicStatus('Session not initialized', '#dc3545');
+                setStatus('Session non initialisée');
                 return;
             }
-            
-            console.log('[Session] Starting recording with session:', sessionId);
-            
+
             try {
-                // Request microphone with WebRTC constraints
                 mediaStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        sampleRate: 16000
-                    }
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 16000 }
                 });
-                
-                // Create AudioContext at 16kHz
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                    sampleRate: 16000
-                });
-                
-                // Create ScriptProcessor (512 samples per chunk - must be power of 2)
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 processor = audioContext.createScriptProcessor(512, 1, 1);
-                
-                // Connect microphone to processor
                 const source = audioContext.createMediaStreamSource(mediaStream);
                 source.connect(processor);
                 processor.connect(audioContext.destination);
-                
-                // Open WebSocket connection
+
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 ws = new WebSocket(`${protocol}//${window.location.host}/ws/audio/${sessionId}`);
                 ws.binaryType = 'arraybuffer';
-                
+
                 ws.onopen = () => {
                     console.log('[WebSocket] Connected');
-                    updateMicStatus('🔴 Recording...', '#dc3545');
+                    setStatus('Écoute en cours…');
                 };
-                
+
                 ws.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        
                         if (data.type === 'status') {
                             console.log('[WebSocket] Status:', data.state);
-                            updateMicStatus(`Status: ${data.state}`, '#17a2b8');
                         } else if (data.type === 'status_update') {
-                            console.log('[WebSocket] Status Update:', data.stage, data.message);
-                            updateMicStatus(`${data.message}`, '#ffc107');
+                            setStatus(data.message);
                         } else if (data.type === 'status_audio') {
-                            console.log('[WebSocket] Status Audio:', data.stage);
-                            // Play status audio in background (minimal UI mode)
-                            if (data.audio) {
-                                playAudio(data.audio);
-                            }
+                            if (data.audio) playAudio(data.audio);
                         } else if (data.type === 'transcript') {
-                            console.log('[WebSocket] Transcript:', data.text);
-                            updateMicStatus(`Transcript: ${data.text}`, '#17a2b8');
+                            setStatus('Transcription…');
                         } else if (data.type === 'response_text') {
-                            console.log('[WebSocket] Response:', data.text);
-                            updateMicStatus(`Response: ${data.text}`, '#28a745');
+                            setStatus('Réponse reçue');
                         } else if (data.type === 'pipeline_result') {
-                            console.log('[WebSocket] Pipeline Result:', data.data);
-                            updateMicStatus('Pipeline complete!', '#28a745');
-
-                            // Always play final audio in background, even in minimal UI
+                            setStatus('Prêt à écouter');
                             if (data.data.final_response_audio) {
                                 playAudio(`data:audio/wav;base64,${data.data.final_response_audio}`);
                             }
-
-                            // In minimal UI mode, skip all result display
-                            if (MINIMAL_CALL_UI) {
-                                console.log('[Minimal UI] Skipping result display');
-                                return;
-                            }
-
-                            // Keep followup / redirect logic, but don't render result panels in minimal UI
-                            const resultsSection = document.getElementById('resultsSection');
-                            if (resultsSection) {
-                                resultsSection.style.display = 'block';
+                            if (MINIMAL_CALL_UI) return;
+                            const rs = document.getElementById('resultsSection');
+                            if (rs) {
+                                rs.style.display = 'block';
                                 updateStatus('success', 'Analysis Complete');
-                                try {
-                                    displayResults(data.data);
-                                    displayVoiceOutput(data.data);
-                                } catch (e) {
-                                    console.error('[Display] Error displaying results:', e);
-                                    console.error('[Display] Data structure:', JSON.stringify(data.data, null, 2));
-                                }
-                            } else {
-                                console.error('[Display] resultsSection not found');
+                                try { displayResults(data.data); displayVoiceOutput(data.data); } catch(e) { console.error(e); }
                             }
                         } else if (data.type === 'error') {
                             console.error('[WebSocket] Error:', data.message);
-                            updateMicStatus(`Error: ${data.message}`, '#dc3545');
+                            setStatus('Erreur');
                         }
-                    } catch (e) {
-                        console.error('[WebSocket] JSON parse error:', e);
-                    }
+                    } catch (e) { console.error('[WebSocket] JSON parse error:', e); }
                 };
-                
-                ws.onerror = (error) => {
-                    console.error('[WebSocket] Error:', error);
-                    updateMicStatus('Connection error', '#dc3545');
-                };
-                
-                ws.onclose = () => {
-                    console.log('[WebSocket] Disconnected');
-                    updateMicStatus('Ready to speak', '#666');
-                };
-                
-                // Handle audio frames
+
+                ws.onerror = () => setStatus('Erreur de connexion');
+                ws.onclose = () => {};
+
                 processor.onaudioprocess = (event) => {
                     if (!isRecording || !ws || ws.readyState !== WebSocket.OPEN) return;
-                    
                     const inputData = event.inputBuffer.getChannelData(0);
-                    
-                    // Convert Float32 to PCM16
                     const pcm16 = new Int16Array(inputData.length);
                     for (let i = 0; i < inputData.length; i++) {
                         const s = Math.max(-1, Math.min(1, inputData[i]));
                         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                     }
-                    
-                    // Send as binary
                     ws.send(pcm16.buffer);
                 };
 
                 isRecording = true;
                 document.body.classList.add('recording');
+                document.body.classList.remove('speaking');
 
-                // Update record button styling
-                const recordBtn = document.getElementById('record-btn');
                 const recordLabel = document.getElementById('record-label');
-                if (recordBtn) {
-                    recordBtn.classList.add('recording');
-                    recordLabel.textContent = 'Release to send';
-                }
+                if (recordLabel) recordLabel.textContent = 'Release to send';
 
                 console.log('[Audio] Recording started');
-                
+
             } catch (error) {
                 console.error('[Audio] Microphone access error:', error);
-                updateMicStatus(`Error: ${error.message}`, '#dc3545');
+                setStatus('Accès micro refusé');
             }
         }
 
         function stopRecording() {
             if (!isRecording) return;
-
             isRecording = false;
             document.body.classList.remove('recording');
 
-            // Reset record button styling
-            const recordBtn = document.getElementById('record-btn');
             const recordLabel = document.getElementById('record-label');
-            if (recordBtn) {
-                recordBtn.classList.remove('recording');
-                recordLabel.textContent = 'Hold to speak';
-            }
+            if (recordLabel) recordLabel.textContent = 'Hold to speak';
 
-            console.log('[Audio] Recording stopped');
-            
-            // Send end_of_speech signal
             if (ws && ws.readyState === WebSocket.OPEN) {
-                const msg = JSON.stringify({type: 'end_of_speech'});
-                ws.send(msg);
-                console.log('[WebSocket] Sent end_of_speech');
-                updateMicStatus('⏳ Processing...', '#ffc107');
+                ws.send(JSON.stringify({type: 'end_of_speech'}));
+                setStatus('Traitement…');
             }
-            
-            // Stop audio capture
-            if (processor) {
-                processor.disconnect();
-            }
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(track => track.stop());
-            }
+            if (processor) processor.disconnect();
+            if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
         }
 
         function updateMicStatus(message, color) {
-            const statusEl = document.getElementById('mic-status');
-            if (statusEl) {
-                statusEl.textContent = message;
-                statusEl.style.color = color;
-            }
+            const el = document.getElementById('mic-status');
+            if (el) { el.textContent = message; el.style.color = color; }
         }
 
-        // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
             if (ws) ws.close();
-            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+            if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
         });
 
-        // Helper function to play audio from base64 data URL
         function playAudio(audioDataUrl) {
             try {
+                document.body.classList.add('speaking');
+                setStatus('Réponse en cours…');
                 const audio = new Audio(audioDataUrl);
                 audio.volume = 1.0;
-
-                // Add speaking state when audio starts
-                audio.addEventListener('play', () => {
-                    document.body.classList.add('speaking');
-                    console.log('[Audio] Speaking state activated');
-                });
-
-                // Remove speaking state when audio ends
                 audio.addEventListener('ended', () => {
                     document.body.classList.remove('speaking');
-                    console.log('[Audio] Speaking state deactivated');
+                    setStatus('Prêt à écouter');
                 });
-
-                audio.play().catch(e => console.error('Error playing audio:', e));
-                console.log('[Audio] Playing audio in background');
-            } catch (e) {
+                audio.play().catch(e => {
+                    console.error('Error playing audio:', e);
+                    document.body.classList.remove('speaking');
+                });
+            } catch(e) {
                 console.error('Error creating audio element:', e);
+                document.body.classList.remove('speaking');
             }
         }
 
-        // Upload functionality (kept for reference, not used in Phase 1)
-        const uploadArea = document.getElementById('uploadArea');
-        const audioInput = document.getElementById('audioInput');
-        const selectedFile = document.getElementById('selectedFile');
-        const fileName = document.getElementById('fileName');
-        const processBtn = document.getElementById('processBtn');
-        const resultsSection = document.getElementById('resultsSection');
-        const statusBadge = document.getElementById('statusBadge');
-        const progressFill = document.getElementById('progressFill');
-        const progressText = document.getElementById('progressText');
-        const summaryGrid = document.getElementById('summaryGrid');
+        // ── COMPAT REFS ────────────────────────────────────────────────
+        const audioInput      = document.getElementById('audioInput');
+        const resultsSection  = document.getElementById('resultsSection');
+        const statusBadge     = document.getElementById('statusBadge');
+        const progressFill    = document.getElementById('progressFill');
+        const progressText    = document.getElementById('progressText');
+        const summaryGrid     = document.getElementById('summaryGrid');
         const stagesContainer = document.getElementById('stagesContainer');
-        
-        // Session ID management
+
+        // ── SESSION MANAGEMENT ─────────────────────────────────────────
         window.addEventListener('load', async () => {
-            // Get session_id from URL
             const urlParams = new URLSearchParams(window.location.search);
             const urlSessionId = urlParams.get('session_id');
-            
             if (urlSessionId) {
                 sessionId = urlSessionId;
-                console.log('[Session] Using existing session:', sessionId);
             } else {
-                // Fallback - create new session
                 try {
                     const response = await fetch('/session/create', { method: 'POST' });
-                    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
-                        console.warn('[Session] No valid JSON from /session/create, skipping');
-                        return;
-                    }
+                    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return;
                     const data = await response.json();
                     sessionId = data.session_id;
-                    console.log('[Session] Created new session:', sessionId);
-                } catch (error) {
-                    console.error('[Session] Failed to create session:', error);
-                }
+                } catch (error) { console.error('[Session] Failed to create session:', error); }
             }
         });
 
         async function endCall() {
             if (sessionId) {
-                try {
-                    await fetch(`/session/${sessionId}`, { method: 'DELETE' });
-                    console.log('[Session] Session ended:', sessionId);
-                } catch (error) {
-                    console.error('[Session] Failed to end session:', error);
-                }
+                try { await fetch(`/session/${sessionId}`, { method: 'DELETE' }); } catch(e) {}
             }
             window.location.href = '/voice-lab';
         }
 
         async function processFullPipeline() {
             if (!audioInput.files.length) return;
-
-            // Show results section
             resultsSection.style.display = 'block';
-            updateStatus('processing', 'Processing voice pipeline...');
+            updateStatus('processing', 'Processing...');
             updateProgress(20, 'Analyzing audio...');
-
             const formData = new FormData();
             formData.append('audio', audioInput.files[0]);
-            if (sessionId) {
-                formData.append('session_id', sessionId);
-            }
-
+            if (sessionId) formData.append('session_id', sessionId);
             try {
-                const response = await fetch('/test/voice-full-pipeline', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
-                    console.warn('[Pipeline] No valid JSON from /test/voice-full-pipeline, skipping');
-                    updateStatus('error', 'Invalid Response');
-                    displayError('Backend did not return valid JSON');
-                    return;
-                }
+                const response = await fetch('/test/voice-full-pipeline', { method: 'POST', body: formData });
+                if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) { updateStatus('error', 'Invalid Response'); return; }
                 const data = await response.json();
                 updateProgress(100, 'Analysis complete!');
-
-                if (response.ok) {
-                    updateStatus('success', 'Analysis Complete');
-                    displayResults(data);
-                    displayVoiceOutput(data);
-                } else {
-                    updateStatus('error', 'Analysis Failed');
-                    displayError(data.detail || 'Unknown error occurred');
-                }
-            } catch (error) {
-                updateStatus('error', 'Network Error');
-                displayError(error.message);
-            }
+                if (response.ok) { updateStatus('success', 'Analysis Complete'); displayResults(data); displayVoiceOutput(data); }
+                else { updateStatus('error', 'Analysis Failed'); }
+            } catch (error) { updateStatus('error', 'Network Error'); }
         }
 
         function updateStatus(type, text) {
-            statusBadge.className = `status-badge status-${type}`;
-            if (type === 'processing') {
-                statusBadge.innerHTML = '<div class="loading-spinner"></div>' + text;
-            } else {
-                statusBadge.textContent = text;
-            }
+            if (!statusBadge) return;
+            statusBadge.textContent = text;
         }
-
         function updateProgress(percent, text) {
-            progressFill.style.width = percent + '%';
-            progressText.textContent = text;
+            if (progressFill) progressFill.style.width = percent + '%';
+            if (progressText) progressText.textContent = text;
         }
-
         function displayResults(data) {
-            // Display summary - handle missing summary field
-            const summary = data.summary || {
-                successful_stages: Object.values(data.stages || {}).filter(s => s && s.success).length,
-                total_stages: Object.keys(data.stages || {}).length,
-                original_transcription: data.stages?.whisper_stt?.transcription || 'N/A',
-                detected_language: data.stages?.whisper_stt?.detected_language || 'en',
-                translation_applied: data.stages?.translator?.translation_applied || false
-            };
+            const summary = data.summary || { successful_stages: 0, total_stages: 0 };
             const successRate = summary.total_stages > 0 ? Math.round((summary.successful_stages / summary.total_stages) * 100) : 0;
-
-            summaryGrid.innerHTML = `
-                <div class="summary-card">
-                    <div class="summary-label">Success Rate</div>
-                    <div class="summary-value">${successRate}%</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-label">Original Text</div>
-                    <div class="summary-value">${(summary.original_transcription || 'N/A').substring(0, 50)}...</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-label">Language</div>
-                    <div class="summary-value">${(summary.detected_language || 'en').toUpperCase()}</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-label">Translation</div>
-                    <div class="summary-value">${summary.translation_applied ? 'Applied' : 'Not Needed'}</div>
-                </div>
-            `;
-
-            // Display ALL stages with complete details
-            let stagesHtml = '';
-            
-            // Security Layer 1: Input Validation
-            const securityLayer1 = data.stages.security_layer1;
-            if (securityLayer1) {
-                stagesHtml += createStageCard('🔒 Security Layer 1 (Input)', securityLayer1, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Is Safe:</span>
-                            <span class="detail-value">${securityLayer1.is_safe ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Risk Score:</span>
-                            <span class="detail-value">${securityLayer1.risk_score || 'N/A'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Success:</span>
-                            <span class="detail-value">${securityLayer1.success ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                    </div>
-                `);
-            }
-
-            // STT Stage
-            const sttStage = data.stages.whisper_stt;
-            stagesHtml += createStageCard('🎤 Speech-to-Text', sttStage, `
-                <div class="stage-details">
-                    <div class="detail-row">
-                        <span class="detail-label">Model:</span>
-                        <span class="detail-value">${sttStage.model}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Language:</span>
-                        <span class="detail-value">${sttStage.detected_language}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Transcription:</span>
-                        <span class="detail-value">${sttStage.transcription}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Success:</span>
-                        <span class="detail-value">${sttStage.success ? '✅ Yes' : '❌ No'}</span>
-                    </div>
-                </div>
-            `);
-
-            // Translator Stage
-            const translatorStage = data.stages.translator;
-            if (translatorStage) {
-                stagesHtml += createStageCard('🌍 Translation', translatorStage, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Source Language:</span>
-                            <span class="detail-value">${translatorStage.source_language}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Target Language:</span>
-                            <span class="detail-value">${translatorStage.target_language}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Original Text:</span>
-                            <span class="detail-value">${translatorStage.original_text}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Translated Text:</span>
-                            <span class="detail-value">${translatorStage.translated_text}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Translation Applied:</span>
-                            <span class="detail-value">${translatorStage.translation_applied ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Success:</span>
-                            <span class="detail-value">${translatorStage.success ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                    </div>
-                `);
-            }
-
-            // Ingestion Stage
-            const ingestionStage = data.stages.ingestion;
-            if (ingestionStage) {
-                stagesHtml += createStageCard('📥 Ingestion', ingestionStage, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Conversation ID:</span>
-                            <span class="detail-value">${ingestionStage.conversation_id}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Original Text:</span>
-                            <span class="detail-value">${ingestionStage.original_text}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Normalized Text:</span>
-                            <span class="detail-value">${ingestionStage.normalized_text_en}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">PII Masked:</span>
-                            <span class="detail-value">${ingestionStage.pii_masked ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Success:</span>
-                            <span class="detail-value">${ingestionStage.success ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                    </div>
-                `);
-            }
-
-            // Orchestrator Stage
-            const orchestratorStage = data.stages.orchestrator;
-            if (orchestratorStage) {
-                stagesHtml += createStageCard('🎯 Intent Analysis', orchestratorStage, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Intent:</span>
-                            <span class="detail-value">${orchestratorStage.intent}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Category:</span>
-                            <span class="detail-value">${orchestratorStage.category}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Confidence:</span>
-                            <span class="detail-value">${(orchestratorStage.confidence * 100).toFixed(1)}%</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Required Agents:</span>
-                            <span class="detail-value">${orchestratorStage.required_agents.join(', ')}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Extraction Method:</span>
-                            <span class="detail-value">${orchestratorStage.extraction_method}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Model Used:</span>
-                            <span class="detail-value">${orchestratorStage.model_used}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Success:</span>
-                            <span class="detail-value">${orchestratorStage.success ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                    </div>
-                `);
-            }
-
-            // Knowledge Base Stage
-            const kbStage = data.stages.knowledge_base;
-            if (kbStage) {
-                stagesHtml += createStageCard('📚 Knowledge Base', kbStage, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Confidence:</span>
-                            <span class="detail-value" style="color: ${kbStage.confidence > 0.7 ? '#28a745' : kbStage.confidence > 0.5 ? '#ffc107' : '#dc3545'};">${(kbStage.confidence * 100).toFixed(1)}%</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Documents Found:</span>
-                            <span class="detail-value">${kbStage.documents_found || 0}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">KB Used:</span>
-                            <span class="detail-value">${kbStage.used ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Success:</span>
-                            <span class="detail-value">${kbStage.success ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                    </div>
-                    <div class="stage-content" style="margin-top: 15px;">
-                        <strong style="margin-top: 15px; display: block;">KB Answer:</strong>
-                        <div style="margin-top: 10px; padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; border-radius: 4px; white-space: pre-wrap; font-family: inherit; line-height: 1.6;">
-                            ${kbStage.answer || 'No answer available'}
-                        </div>
-                    </div>
-                `);
-            }
-
-            // Client Support Stage
-            if (data.agent_response) {
-                stagesHtml += createStageCard('🎯 Client Support', {success: true}, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Agent Type:</span>
-                            <span class="detail-value" style="background: #28a745; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">Client Support Agent</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Response Type:</span>
-                            <span class="detail-value">Final User-Facing Answer</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Input Sources:</span>
-                            <span class="detail-value">KB Results + Context</span>
-                        </div>
-                    </div>
-                    <div class="stage-content" style="margin-top: 15px;">
-                        <strong>Final Response to User:</strong>
-                        <div style="margin-top: 10px; padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px; white-space: pre-wrap; font-family: inherit; line-height: 1.6; font-size: 16px; color: #155724;">
-                            ${data.agent_response}
-                        </div>
-                    </div>
-                `);
-            }
-
-            // Security Layer 2: Output Validation
-            const securityLayer2 = data.stages.security_layer2;
-            if (securityLayer2) {
-                stagesHtml += createStageCard('🔒 Security Layer 2 (Output)', securityLayer2, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Success:</span>
-                            <span class="detail-value">${securityLayer2.success ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Modified:</span>
-                            <span class="detail-value">${securityLayer2.modified ? '✅ Yes' : '❌ No'}</span>
-                        </div>
-                        ${securityLayer2.error ? `
-                        <div class="detail-row">
-                            <span class="detail-label">Error:</span>
-                            <span class="detail-value" style="color: #dc3545;">${securityLayer2.error}</span>
-                        </div>
-                        ` : ''}
-                    </div>
-                    <div class="stage-content" style="margin-top: 15px;">
-                        <strong>Validation Method:</strong>
-                        <div style="margin-top: 8px; padding: 10px; background: #e9ecef; border-radius: 4px; font-size: 12px;">
-                            NeMo Guard NIM - Content Safety & Topic Control
-                        </div>
-                    </div>
-                `);
-            }
-
-            // Agent Selection Info
-            if (data.orchestrator_output && data.orchestrator_output.required_agents) {
-                stagesHtml += createStageCard('🤖 Agent Selection', {success: true}, `
-                    <div class="stage-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Selected Agent:</span>
-                            <span class="detail-value" style="background: #856404; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">${data.selected_agent || 'Unknown'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Required Agents:</span>
-                            <span class="detail-value">${data.orchestrator_output.required_agents.join(', ')}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Response Type:</span>
-                            <span class="detail-value">Final Synthesized Answer</span>
-                        </div>
-                    </div>
-                `);
-            }
-
-            // Mission Briefs
-            if (data.orchestrator_output && data.orchestrator_output.mission_briefs) {
-                stagesHtml += createStageCard('📋 Mission Briefs', {success: true}, `
-                    <div class="stage-content">
-                        ${Object.entries(data.orchestrator_output.mission_briefs).map(([agent, brief]) => `
-                            <div style="margin-top: 10px; padding: 15px; background: #fff3cd; border-left: 4px solid #f39c12; border-radius: 4px;">
-                                <strong>${agent}:</strong>
-                                <div style="margin-top: 8px; white-space: pre-wrap; font-family: inherit; line-height: 1.5;">${brief.substring(0, 500)}${brief.length > 500 ? '...' : ''}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                `);
-            }
-
-            stagesContainer.innerHTML = stagesHtml;
+            if (summaryGrid) summaryGrid.innerHTML = `<div>${successRate}% success</div>`;
         }
+        function displayVoiceOutput(data) { if (MINIMAL_CALL_UI) return; }
+        function createStageCard(title, stage, content) { return `<div>${title}: ${content}</div>`; }
+        function displayError(message) { if (stagesContainer) stagesContainer.innerHTML = `<div>Error: ${message}</div>`; }
 
-        function displayVoiceOutput(data) {
-            if (MINIMAL_CALL_UI) return;
-            // Always show the voice output section
-            voiceOutputSection.style.display = 'block';
-
-            // Update localized response - handle missing fields
-            const detectedLangEl = document.getElementById('detectedLang');
-            const localizedResponseEl = document.getElementById('localizedResponse');
-            if (detectedLangEl) detectedLangEl.textContent = data.stages?.whisper_stt?.detected_language || 'Unknown';
-            if (localizedResponseEl) localizedResponseEl.textContent = data.agent_response || 'No response available';
-
-            // Update audio if available
-            if (data.final_response_audio) {
-                audioContainer.style.display = 'block';
-                audioModel.textContent = data.audio_model_used || 'No audio model';
-                sampleRate.textContent = data.audio_sample_rate || 'Unknown rate';
-
-                // Set audio source
-                audioSource.src = `data:audio/wav;base64,${data.final_response_audio}`;
-                downloadLink.href = `data:audio/wav;base64,${data.final_response_audio}`;
-                
-                // Load and play audio
-                audioPlayer.load();
-            } else {
-                audioContainer.style.display = 'none';
-            }
-        }
-
-        function createStageCard(title, stage, content) {
-            const statusClass = stage.success ? 'success' : 'error';
-            const statusIcon = stage.success ? '✅' : '❌';
-            
-            return `
-                <div class="stage-card ${statusClass} collapsed">
-                    <div class="stage-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                        <div style="display: flex; align-items: center;">
-                            <div class="stage-icon">${statusIcon}</div>
-                            <div class="stage-title">${title}</div>
-                        </div>
-                        <div class="stage-chevron">▼</div>
-                    </div>
-                    <div class="stage-content">
-                        ${content}
-                    </div>
-                </div>
-            `;
-        }
-
-        function displayError(message) {
-            stagesContainer.innerHTML = `
-                <div class="error-message">
-                    <strong>Error:</strong> ${message}
-                </div>
-            `;
-        }
-    
-    
-        
-        // Wrap displayResults cleanly to handle followup fast-path
         const originalDisplayResults = displayResults;
         displayResults = function(data) {
             if (data.action === 'redirect') {
                 window.location.href = '/loan-eligibility-form?session_id=' + sessionId + '&lang=' + window.lastDetectedLanguage;
                 return;
             }
-            if (data.action === 'continue') {
-                dismissFollowup();
-                return;
-            }
+            if (data.action === 'continue') { dismissFollowup(); return; }
             if (data.action === 'retry') {
                 window.followupRetries++;
-                if (window.followupRetries > 2) {
-                    dismissFollowup();
-                } else {
+                if (window.followupRetries > 2) { dismissFollowup(); }
+                else {
                     document.getElementById('mic-button').classList.add('waiting');
-                    const micStatus = document.getElementById('mic-status');
-                    micStatus.textContent = "Je n'ai pas compris, répondez Oui ou Non";
-                    micStatus.style.color = '#ff5555';
+                    setStatus("Je n'ai pas compris, Oui ou Non ?");
                     resetFollowupTimeout();
                 }
                 return;
             }
-            
-            // Standard execution
             originalDisplayResults(data);
-            
-            // Check if pipeline response triggers follow-up
             if (data.loan_followup_triggered) {
                 window.isFollowupMode = true;
                 window.followupRetries = 0;
                 window.lastDetectedLanguage = data.stages?.whisper_stt?.detected_language || 'en';
-                
                 document.getElementById('mic-button').classList.add('waiting');
-                const micStatus = document.getElementById('mic-status');
-                micStatus.textContent = 'Oui / Non ?';
-                micStatus.style.color = '#ffc107';
-                
+                setStatus('Oui ou Non ?');
                 resetFollowupTimeout();
             }
         };
@@ -1238,77 +826,34 @@
             window.followupRetries = 0;
             clearTimeout(window.followupTimeout);
             document.getElementById('mic-button').classList.remove('waiting');
-            const micStatus = document.getElementById('mic-status');
-            micStatus.textContent = 'Ready to speak';
-            micStatus.style.color = '#c2ddc9';
+            setStatus('Prêt à écouter');
         }
 
         function resetFollowupTimeout() {
             clearTimeout(window.followupTimeout);
-            window.followupTimeout = setTimeout(() => {
-                dismissFollowup();
-            }, 15000);
+            window.followupTimeout = setTimeout(dismissFollowup, 15000);
         }
 
-        // Additional UI Logic
+        // Timer (compat)
         (function() {
-            let callInterval;
-            let callSeconds = 0;
-
-            function formatTime(s) {
-                const mins = Math.floor(s / 60);
-                const secs = s % 60;
-                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-            }
-
-            const timerEl = document.getElementById('call-timer');
-            const orbBtn = document.getElementById('mic-button');
+            let callInterval, callSeconds = 0;
+            const timerEl  = document.getElementById('call-timer');
+            const orbBtn   = document.getElementById('mic-button');
             const voSection = document.getElementById('voiceOutputSection');
-            const locResp = document.getElementById('localizedResponse');
-
-            function startTimerUI() {
+            const locResp  = document.getElementById('localizedResponse');
+            function fmt(s) { return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`; }
+            function startT() {
                 callSeconds = 0;
-                timerEl.textContent = '00:00';
-                
-                voSection.style.opacity = '0';
-                setTimeout(() => {
-                    if(voSection.style.opacity === '0') {
-                        voSection.style.display = 'none';
-                        locResp.textContent = '';
-                    }
-                }, 500);
-
+                if (timerEl) timerEl.textContent = '00:00';
                 clearInterval(callInterval);
-                callInterval = setInterval(() => {
-                    callSeconds++;
-                    timerEl.textContent = formatTime(callSeconds);
-                }, 1000);
+                callInterval = setInterval(() => { callSeconds++; if(timerEl) timerEl.textContent = fmt(callSeconds); }, 1000);
             }
-
-            function stopTimerUI() {
-                clearInterval(callInterval);
-            }
-
-            orbBtn.addEventListener('mousedown', startTimerUI);
-            orbBtn.addEventListener('touchstart', startTimerUI);
-
-            orbBtn.addEventListener('mouseup', stopTimerUI);
-            orbBtn.addEventListener('mouseleave', stopTimerUI);
-            orbBtn.addEventListener('touchend', stopTimerUI);
-
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.attributeName === 'style') {
-                        const display = mutation.target.style.display;
-                        if (display === 'flex' || display === 'block') {
-                            setTimeout(() => {
-                                mutation.target.style.opacity = '1';
-                            }, 10);
-                        }
-                    }
-                });
-            });
-            observer.observe(voSection, { attributes: true });
+            function stopT() { clearInterval(callInterval); }
+            orbBtn.addEventListener('mousedown', startT);
+            orbBtn.addEventListener('touchstart', startT);
+            orbBtn.addEventListener('mouseup', stopT);
+            orbBtn.addEventListener('mouseleave', stopT);
+            orbBtn.addEventListener('touchend', stopT);
         })();
     </script>
 </body>
