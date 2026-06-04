@@ -1,6 +1,6 @@
 """
 Loan Agent - Specialized in loan approval decisions.
-Handles multi-turn conversations for loan applications.
+Handles multi-turn conversations for loan applications and eligibility tests.
 """
 
 from app.schemas.conversation import ConversationState
@@ -8,132 +8,125 @@ from app.schemas.conversation import ConversationState
 def run_loan_agent(state: ConversationState) -> ConversationState:
     """
     Loan Agent implementation.
-    Evaluates loan applications and handles multi-turn information collection.
+    Handles eligibility test flow and loan applications.
+    Now context-aware with turn-based conversation architecture.
     """
+    print(f"[Loan Agent] ENTER run_loan_agent for session {state.conversation_id}")
+    
+    # Get conversation context from session
+    from app.layer2.shared.session_manager import get_conversation_context, set_agent_waiting_state, add_turn_record
+    from app.schemas.conversation_context import TurnRecord
+    conv_ctx = get_conversation_context(state.conversation_id)
+    print(f"[Loan Agent] conv_ctx={conv_ctx is not None}")
+    
+    # Check if THIS agent was the last active agent
+    last_turn = conv_ctx.get_last_turn() if conv_ctx else None
+    agent_history = conv_ctx.get_agent_history("loan_agent") if conv_ctx else []
+    
+    # Build agent memory from conversation history
+    agent_memory = ""
+    if agent_history:
+        agent_memory = "Your previous responses in this conversation:\n"
+        for turn in agent_history:
+            agent_memory += f"- You said: {turn.agent_response}\n"
+    
     # Get the mission brief from orchestrator
     mission_brief = state.mission_brief.get("loan", "")
     
-    # Check if this is a follow-up in a multi-turn conversation
-    conversation_context = state.orchestrator_context.get("loan_conversation_active", False)
+    # Check if we're in eligibility test mode
+    eligibility_test_active = state.orchestrator_context.get("eligibility_test_active", False)
+    eligibility_test_asked = state.orchestrator_context.get("eligibility_test_asked", False)
+    eligibility_test_answer = state.orchestrator_context.get("eligibility_test_answer", None)
     
-    if not conversation_context:
-        # Initial loan application - start information collection
-        response = """I'll help you with your loan application. To provide you with the best loan options, I need to collect some information:
+    print(f"[Loan Agent] eligibility_test_active={eligibility_test_active}, eligibility_test_asked={eligibility_test_asked}, eligibility_test_answer={eligibility_test_answer}")
 
-REQUIRED INFORMATION:
-1. Employment status and monthly income
-2. Loan amount requested
-3. Loan purpose (home purchase, refinance, etc.)
-4. Credit score range (if known)
-5. Down payment amount (if applicable)
-
-Please provide this information, and I'll evaluate your loan eligibility and available options.
-
-You can share this information across multiple messages if that's more convenient."""
+    # Check if user already declined eligibility test in this session
+    from app.layer2.shared.session_manager import is_eligibility_declined
+    if is_eligibility_declined(state.conversation_id):
+        print(f"[Loan Agent] User already declined eligibility test, skipping question")
+        # Skip eligibility question and proceed with normal loan response
+        pass
+    elif not eligibility_test_active and not eligibility_test_asked:
+        # Initial loan query - ask about eligibility test
+        response = """Would you like to test if you're eligible for a loan? I can quickly assess your eligibility or you can start a full application. Just say 'yes' or 'no'."""
         
-        # Mark that we're in a multi-turn conversation
-        state.orchestrator_context["loan_conversation_active"] = True
-        state.orchestrator_context["awaiting_client_info"] = True
-        state.orchestrator_context["loan_agent_waiting"] = True
+        # Mark that we're asking about eligibility test
+        state.orchestrator_context["eligibility_test_active"] = True
+        state.orchestrator_context["eligibility_test_asked"] = True
+        state.orchestrator_context["awaiting_eligibility_answer"] = True
+        
+        # Mark in session that we're waiting for eligibility answer
+        from app.layer2.shared.session_manager import set_waiting_for_eligibility_answer, get_session
+        set_waiting_for_eligibility_answer(state.conversation_id, state.source_language)
+        
+        # Record this turn in conversation context
+        if conv_ctx:
+            turn = TurnRecord(
+                turn_number=conv_ctx.current_turn + 1,
+                user_input=state.original_text,
+                user_input_normalized=state.normalized_text_en,
+                user_language=state.source_language,
+                agent_routed_to="loan_agent",
+                agent_response=response,
+                intent=state.intent,
+                confidence=state.orchestrator_context.get("confidence", 0),
+                routing_reason="Loan intent detected",
+            )
+            add_turn_record(state.conversation_id, turn)
+            
+            # Update conversation context language
+            conv_ctx.language = state.source_language
+            
+            # Set waiting state in conversation context (this will persist the updated conv_ctx)
+            set_agent_waiting_state(
+                state.conversation_id,
+                agent_name="loan_agent",
+                input_type="eligibility_answer",
+                context_data={"asked_turn": conv_ctx.current_turn}
+            )
+            print(f"[Loan Agent] Set waiting state: eligibility_answer for session {state.conversation_id}")
+            
+            # Ensure the session has the updated conversation context
+            session = get_session(state.conversation_id)
+            if session:
+                session["conversation_context"] = conv_ctx
+                print(f"[Loan Agent] Updated conversation context language to: {state.source_language}")
         
         # Update state with agent response
         state.agent_feedback = {
             "loan": {
                 "status": "completed",
                 "response": response,
-                "confidence": 0.8,
+                "confidence": 0.9,
                 "needs_more_info": True,
                 "analysis": {
-                    "needs_more_work": True,
-                    "next_agent_suggested": None  # Wait for client input
+                    "needs_more_work": False,
+                    "next_agent_suggested": None  # Wait for client answer
                 }
             }
         }
         
-        state.trace.append("loan:started:information_collection")
+        state.trace.append("loan:eligibility_test:asking_client")
         
-    else:
-        # Follow-up in multi-turn conversation
-        # Check if we have enough information to evaluate
-        client_info = state.normalized_text_en
+    elif eligibility_test_asked and eligibility_test_answer is None:
+        # Waiting for client's yes/no answer - this should be intercepted at router level now
+        # But keep this as fallback for edge cases
+        response = """I didn't quite understand. Would you like to test your loan eligibility? Please say 'yes' or 'no'."""
         
-        # Simple heuristic to check if we have key information
-        has_income = any(word in client_info.lower() for word in ["income", "salary", "earn", "make"])
-        has_amount = any(word in client_info.lower() for word in ["$", "amount", "need", "request"])
-        has_purpose = any(word in client_info.lower() for word in ["home", "house", "car", "personal", "business"])
-        
-        if has_income and has_amount and has_purpose:
-            # We have enough information - evaluate the loan
-            response = """Thank you for providing your information. Based on what you've shared:
-
-LOAN EVALUATION SUMMARY:
-✅ Information complete - proceeding with evaluation
-✅ Eligibility assessment in progress
-✅ Available loan options being calculated
-
-NEXT STEPS:
-1. I'll calculate your loan eligibility and available rates
-2. Client Support will provide you with the complete loan offer
-3. You can then proceed with the application or ask questions
-
-Please wait while I complete the evaluation..."""
-            
-            # Mark evaluation as complete
-            state.orchestrator_context["loan_conversation_active"] = False
-            state.orchestrator_context["awaiting_client_info"] = False
-            state.orchestrator_context["loan_agent_waiting"] = False
-            
-            # Update state with agent response
-            state.agent_feedback = {
-                "loan": {
-                    "status": "completed",
-                    "response": response,
-                    "confidence": 0.9,
-                    "evaluation_complete": True,
-                    "analysis": {
-                        "needs_more_work": True,
-                        "next_agent_suggested": "client_support"
-                    }
+        state.agent_feedback = {
+            "loan": {
+                "status": "completed",
+                "response": response,
+                "confidence": 0.7,
+                "needs_more_info": True,
+                "analysis": {
+                    "needs_more_work": False,
+                    "next_agent_suggested": None
                 }
             }
-            
-            state.trace.append("loan:evaluation_complete:ready_for_client_support")
-            
-        else:
-            # Need more information
-            missing_info = []
-            if not has_income:
-                missing_info.append("income/salary information")
-            if not has_amount:
-                missing_info.append("loan amount needed")
-            if not has_purpose:
-                missing_info.append("loan purpose")
-            
-            response = f"""Thank you for the additional information. I still need some details to complete your loan evaluation:
-
-STILL NEEDED:
-{chr(10).join([f"- {info}" for info in missing_info])}
-
-Please provide the remaining information so I can evaluate your loan application. You can share this in your next message."""
-            
-            # Continue waiting for more information
-            state.orchestrator_context["awaiting_client_info"] = True
-            
-            # Update state with agent response
-            state.agent_feedback = {
-                "loan": {
-                    "status": "completed",
-                    "response": response,
-                    "confidence": 0.7,
-                    "needs_more_info": True,
-                    "analysis": {
-                        "needs_more_work": True,
-                        "next_agent_suggested": None  # Still waiting for client input
-                    }
-                }
-            }
-            
-            state.trace.append("loan:awaiting_more_info")
+        }
+        
+        state.trace.append("loan:eligibility_test:unclear_answer:asking_again")
     
     return state
 

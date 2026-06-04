@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -47,6 +47,7 @@ class ConversationState(BaseModel):
     kb_result: str | None = None
     loan_result: Any | None = None
     reconstructed_query: Optional[str] = None
+    conversation_history: List[Any] = Field(default_factory=list)  # Previous turns for context
 
 
 class ChatResponse(BaseModel):

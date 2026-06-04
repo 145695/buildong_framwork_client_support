@@ -85,12 +85,26 @@ async def _run_without_langgraph(state: ConversationState) -> ConversationState:
     # Deterministic fallback so framework can run before dependencies are ready.
     state = route_intent(state)
     
+    # Check if loan eligibility test
+    loan_intents = ["check_loan_eligibility", "apply_for_loan", "loan_status", "apply_for_mortgage"]
+    eligibility_test_asked = state.orchestrator_context.get("eligibility_test_asked", False)
+    eligibility_answer = state.orchestrator_context.get("eligibility_test_answer", None)
+    
+    # Skip KB if we're in loan eligibility test mode
+    should_skip_kb = state.intent in loan_intents or eligibility_test_asked
+    
     # Execute agents based on orchestrator selection
-    if "knowledge_base" in state.required_agents:
+    if "knowledge_base" in state.required_agents and not should_skip_kb:
         state = knowledge_base_node(state)
 
     if "loan" in state.required_agents:
         state = run_loan_agent(state)
+        # If eligibility test is answered, skip client_support
+        if eligibility_answer is not None:
+            state.trace.append("layer2:loan_eligibility_test:answered:skipping_client_support")
+            state.trace.append("layer2:runtime:fallback")
+            state.trace.append("layer2:complete")
+            return state
 
     if "client_support" in state.required_agents:
         state = client_support_node(state)
@@ -110,30 +124,50 @@ def _run_with_langgraph(state: ConversationState) -> ConversationState:
     # Remove old loan nodes - will add new ones below
     
     def choose_after_start(current: ConversationState) -> str:
-        # Always route to knowledge_base first (intent already computed)
-        print("🔍 Graph Routing: Using pre-computed intent, routing to knowledge_base")
-        return "knowledge_base"
-
-    # Route from knowledge_base to loan (conditional) or client_support
-    def choose_after_knowledge_base(current: ConversationState) -> str:
-        # Check if loan evaluation is needed
-        loan_intents = ["check_loan_eligibility", "apply_for_loan", "loan_status"]
+        # Check if we're waiting for eligibility test answer
+        eligibility_test_asked = current.orchestrator_context.get("eligibility_test_asked", False)
+        print(f"🔍 Graph Routing DEBUG: eligibility_test_asked={eligibility_test_asked}, intent={current.intent}")
+        
+        if eligibility_test_asked:
+            print("🔍 Graph Routing: Waiting for eligibility test answer, routing to loan_agent")
+            return "loan_agent"
+        
+        # Check if loan eligibility test
+        loan_intents = ["check_loan_eligibility", "apply_for_loan", "loan_status", "apply_for_mortgage", "check_mortgage_payments"]
+        print(f"🔍 Graph Routing DEBUG: intent '{current.intent}' in loan_intents {loan_intents}: {current.intent in loan_intents}")
+        
         if current.intent in loan_intents:
-            print("🔍 Graph Routing: Loan intent detected, routing to loan_agent")
+            # Route loan intents directly to loan agent, skip knowledge_base
+            print("🔍 Graph Routing: Loan intent detected, routing directly to loan_agent (skipping KB)")
             return "loan_agent"
         else:
-            print("🔍 Graph Routing: No loan intent, routing to client_support")
-            return "client_support"
+            # Non-loan queries go through knowledge_base first
+            print("🔍 Graph Routing: Using pre-computed intent, routing to knowledge_base")
+            return "knowledge_base"
 
-    # Route from loan to client_support (always)
-    def choose_after_loan(current: ConversationState) -> str:
-        print("🔍 Graph Routing: Loan complete, routing to client_support")
+    # Route from knowledge_base to client_support (no loan here anymore, they go directly to loan_agent)
+    def choose_after_knowledge_base(current: ConversationState) -> str:
+        print("🔍 Graph Routing: Knowledge base complete, routing to client_support")
         return "client_support"
 
-    # Placeholder nodes
+    # Route from loan to client_support only if needed
+    def choose_after_loan(current: ConversationState) -> str:
+        # Check if eligibility test is complete (answered yes or no)
+        eligibility_answer = current.orchestrator_context.get("eligibility_test_answer", None)
+        
+        if eligibility_answer is not None:
+            # Eligibility test has been answered, skip client_support and end layer2
+            print("🔍 Graph Routing: Loan eligibility test answered, ending layer2 pipeline")
+            return END
+        else:
+            # Eligibility test still pending, go to client_support for synthesis
+            print("🔍 Graph Routing: Loan eligibility test pending, routing to client_support")
+            return "client_support"
+
+    # Loan agent node
     def loan_agent_node(state: ConversationState) -> ConversationState:
-        print("🔍 Loan Agent: Processing loan evaluation (placeholder)")
-        state.loan_result = None  # placeholder
+        print("🔍 Loan Agent: Processing loan eligibility test")
+        state = run_loan_agent(state)
         return state
 
     # client_support_node is now defined outside this function
@@ -142,22 +176,23 @@ def _run_with_langgraph(state: ConversationState) -> ConversationState:
     graph.add_node("loan_agent", loan_agent_node)
     graph.add_node("client_support", client_support_node)
 
-    # Updated graph edges - start directly to knowledge_base
+    # Updated graph edges - start can go to knowledge_base or loan_agent
     graph.add_conditional_edges(
         START,
         choose_after_start,
         {
             "knowledge_base": "knowledge_base",
+            "loan_agent": "loan_agent",
         },
     )
 
     graph.add_conditional_edges("knowledge_base", choose_after_knowledge_base, {
-        "loan_agent": "loan_agent",
         "client_support": "client_support",
     })
 
     graph.add_conditional_edges("loan_agent", choose_after_loan, {
         "client_support": "client_support",
+        END: END,
     })
 
     # client_support goes to END

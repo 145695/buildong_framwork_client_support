@@ -8,6 +8,13 @@ from app.layer1.audio_processor import AudioProcessor
 from app.layer1.vad_engine import VADEngine
 from app.utils.status_messages import get_status_message
 import json
+import asyncio
+import wave
+import io
+import numpy as np
+import soundfile as sf
+import base64
+from starlette.datastructures import UploadFile
 
 router = APIRouter()
 
@@ -30,14 +37,14 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
     if session_id not in session_manager.sessions:
         await websocket.close(code=1008)
         return
-    
+
     await websocket.accept()
     # Initialize processor with VAD
     processor = AudioProcessor(vad_engine=VADEngine())
     # Set initial state
     session_manager.update_audio_state(session_id, "RECORDING")
     await websocket.send_json({"type": "status", "state": "RECORDING"})
-    
+
     try:
         while True:
             msg = await websocket.receive()
@@ -60,6 +67,11 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                     data = {}
                 msg_type = data.get('type')
                 if msg_type == 'end_of_speech' or processor.should_process():
+                    # Bugfix: propagate follow-up state into the voice pipeline.
+                    # Client should send it in the control message, e.g.:
+                    # {"type": "end_of_speech", "is_followup": true}
+                    is_followup = bool(data.get("is_followup", False))
+
                     session_manager.update_audio_state(session_id, "PROCESSING")
                     await websocket.send_json({"type": "status", "state": "PROCESSING"})
                     audio_data = processor.get_accumulated_audio()
@@ -85,15 +97,11 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                         # Generate and send TTS audio for status message
                         try:
                             from app.main import ml_models
-                            import soundfile as sf
-                            import io
-                            import numpy as np
-                            import base64
 
                             print(f"[Status TTS] Generating audio for stage: {stage}, message: {message}, language: {language}")
 
                             # Select TTS model based on language
-                            audio_data = None
+                            tts_audio_data = None
                             sample_rate = 24000
 
                             if language == "ar":
@@ -106,13 +114,13 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                     tts.write_to_fp(wav_buffer)
                                     wav_buffer.seek(0)
                                     # Convert MP3 to WAV using soundfile
-                                    audio_data, sample_rate = sf.read(wav_buffer)
+                                    tts_audio_data, sample_rate = sf.read(wav_buffer)
                                     # Convert to mono if stereo
-                                    if len(audio_data.shape) > 1:
-                                        audio_data = audio_data[:, 0]
+                                    if len(tts_audio_data.shape) > 1:
+                                        tts_audio_data = tts_audio_data[:, 0]
                                 except Exception as e:
                                     print(f"[Status TTS] gTTS failed for Arabic: {e}")
-                                    audio_data = None
+                                    tts_audio_data = None
                             elif language == "fr":
                                 # For French, use gTTS as fallback since Kokoro FR may not have good French voices
                                 try:
@@ -123,10 +131,10 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                     tts.write_to_fp(wav_buffer)
                                     wav_buffer.seek(0)
                                     # Convert MP3 to WAV using soundfile
-                                    audio_data, sample_rate = sf.read(wav_buffer)
+                                    tts_audio_data, sample_rate = sf.read(wav_buffer)
                                     # Convert to mono if stereo
-                                    if len(audio_data.shape) > 1:
-                                        audio_data = audio_data[:, 0]
+                                    if len(tts_audio_data.shape) > 1:
+                                        tts_audio_data = tts_audio_data[:, 0]
                                 except Exception as e:
                                     print(f"[Status TTS] gTTS failed for French: {e}")
                                     # Fallback to Kokoro EN
@@ -138,7 +146,7 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                         for i, (phonemes, duration, audio) in enumerate(generator):
                                             chunks.append(audio)
                                         if chunks:
-                                            audio_data = np.concatenate(chunks)
+                                            tts_audio_data = np.concatenate(chunks)
                                             sample_rate = 24000
                             else:
                                 # Use Kokoro EN for English and others
@@ -150,15 +158,15 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                     for i, (phonemes, duration, audio) in enumerate(generator):
                                         chunks.append(audio)
                                     if chunks:
-                                        audio_data = np.concatenate(chunks)
+                                        tts_audio_data = np.concatenate(chunks)
                                 else:
                                     print(f"[Status TTS] Kokoro EN not found")
 
-                            if audio_data is not None:
-                                print(f"[Status TTS] Audio generated, shape: {audio_data.shape}")
+                            if tts_audio_data is not None:
+                                print(f"[Status TTS] Audio generated, shape: {tts_audio_data.shape}")
                                 # Convert to WAV bytes
                                 wav_buffer = io.BytesIO()
-                                sf.write(wav_buffer, audio_data, sample_rate, format="WAV")
+                                sf.write(wav_buffer, tts_audio_data, sample_rate, format="WAV")
                                 wav_buffer.seek(0)
                                 audio_bytes = wav_buffer.read()
                                 print(f"[Status TTS] WAV bytes: {len(audio_bytes)} bytes")
@@ -181,8 +189,6 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                     # Convert numpy array to raw PCM bytes
                     pcm_bytes = audio_data.tobytes()
                     # Convert raw PCM to WAV format
-                    import wave
-                    import io
                     wav_buffer = io.BytesIO()
                     with wave.open(wav_buffer, 'wb') as wav_file:
                         wav_file.setnchannels(1)  # Mono
@@ -191,11 +197,15 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                         wav_file.writeframes(pcm_bytes)
                     wav_buffer.seek(0)
                     # Create an UploadFile-like object for the full pipeline endpoint
-                    from starlette.datastructures import UploadFile
                     upload_file = UploadFile(filename="audio.wav", file=wav_buffer)
                     # Call the INTERNAL voice pipeline with status callback
                     from app.routers.voice import _voice_full_pipeline_internal
-                    pipeline_result = await _voice_full_pipeline_internal(upload_file, session_id, status_callback)
+                    pipeline_result = await _voice_full_pipeline_internal(
+                        upload_file,
+                        session_id,
+                        status_callback,
+                        is_followup=is_followup,
+                    )
 
                     # Send the complete pipeline results back to client
                     await websocket.send_json({

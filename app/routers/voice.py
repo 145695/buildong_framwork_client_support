@@ -480,16 +480,17 @@ async def voice_full_pipeline(audio: UploadFile = File(...), session_id: Optiona
     return await _voice_full_pipeline_internal(audio, session_id, status_callback=None)
 
 
-async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[str], status_callback: Optional[callable] = None):
+async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[str], status_callback: Optional[callable] = None, is_followup: bool = False):
     """
     Internal voice pipeline with optional status callback.
     This is the actual implementation that can be called with a callback from WebSocket.
     """
+    print(f"[Voice Pipeline] ENTER _voice_full_pipeline_internal | session_id={session_id} | is_followup={is_followup}", flush=True)
     from app.main import ml_models
     from app.layer1.ingestion import ingest_chat_request
     from app.layer2.orchestrator import smart_pm_routing
     from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
-    from app.layer2.shared.session_manager import create_session, get_session, add_to_history
+    from app.layer2.shared.session_manager import create_session, get_session, add_to_history, get_conversation_context, is_waiting_for_eligibility_answer, get_eligibility_language, clear_eligibility_flag
     from app.schemas.conversation import ChatRequest, SourceChannel
     from app.utils.status_messages import get_status_message
 
@@ -752,6 +753,26 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         }
         raise HTTPException(500, f"Speech-to-text failed: {error_str}")
 
+    # Handle fast path if is_followup is True
+    if is_followup:
+        t_lower = transcription.lower() if transcription else ""
+        if any(word in t_lower for word in ["oui", "yes", "نعم"]):
+            # Client-side should navigate to this URL (placeholder; user can change later)
+            return {
+                "action": "redirect",
+                "url": "https://PLACEHOLDER-LOAN-URL.example/eligibility"
+            }
+        elif any(word in t_lower for word in ["non", "no", "لا"]):
+            return {
+                "action": "continue",
+                "message": "Do you have any other questions?"
+            }
+        else:
+            return {
+                "action": "retry",
+                "message": "Please answer Yes or No."
+            }
+
     # Step 2: Apply language validation
     detected_language = validate_language(detected_language)
     
@@ -867,6 +888,181 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         
         state = ingest_chat_request(chat_request)
         
+        # RESTORE orchestrator context from session to preserve multi-turn state
+        from app.layer2.shared.session_manager import get_orchestrator_context
+        saved_context = get_orchestrator_context(session_id)
+        if saved_context:
+            print(f"[Voice Pipeline] Restoring orchestrator_context from session: {saved_context}")
+            state.orchestrator_context.update(saved_context)
+        
+        # STEP 1: Check if we're in a special state using new conversation context
+        conv_context = get_conversation_context(session_id)
+        
+        # DEBUG: Print conversation context state
+        print(f"[Voice Pipeline] Conversation context check: session_id={session_id}, waiting_for_input_type={conv_context.waiting_for_input_type if conv_context else 'None'}")
+        
+        # CHECK: Are we waiting for eligibility yes/no answer? (New architecture)
+        # Use both new conversation context AND old flag for compatibility
+        is_waiting_new = conv_context and conv_context.waiting_for_input_type == "eligibility_answer"
+        is_waiting_old = is_waiting_for_eligibility_answer(session_id)
+        
+        if is_waiting_new or is_waiting_old:
+            user_response = state.normalized_text_en.lower()
+            # Use conversation context language if available, otherwise fall back to old method
+            if conv_context and conv_context.language:
+                eligibility_language = conv_context.language
+            else:
+                eligibility_language = get_eligibility_language(session_id)
+            print(f"[Voice Pipeline] ELIGIBILITY INTERCEPTION: language={eligibility_language}, user_response={user_response}, new_check={is_waiting_new}, old_check={is_waiting_old}")
+            
+            # YES RESPONSES (English, French, Arabic, Moroccan Darija)
+            yes_patterns = ["yes", "yeah", "sure", "okay", "ok", "yep", "absolutely", "definitely",
+                           "yes please", "yes, please", "yes thanks", "yes, thanks", "yes thank you", "yes, thank you",
+                           "oui", "ouais", "d'accord", "bien sûr", "oui merci", "oui s'il vous plaît",
+                           "نعم", "أيوا", "طبعا", "نعم من فضلك", "أيوا من فضلك", "أكيد", "بالتأكيد", "أجل",
+                           "واه", "يلا", "صافي", "مزيان", "كيما بغيتي"]
+
+            # NO RESPONSES (English, French, Arabic, Moroccan Darija)
+            no_patterns = ["no", "nope", "not now", "don't want", "skip", "later", "don't", "no thanks", "no, thanks",
+                          "non", "non merci", "pas maintenant", "plus tard", "non s'il vous plaît",
+                          "لا", "لاه", "معليش", "لا من فضلك", "لا أريد", "لا شكرا", "بالطبع لا",
+                          "ما بغيتش", "ما نقدرش", "ما كاينش"]
+
+            # Normalize user response for matching (lowercase, strip whitespace)
+            user_response_normalized = user_response.strip().lower()
+
+            # Check if response is EXACTLY one of the yes/no patterns (or very short with punctuation)
+            # This prevents matching "yes" in longer sentences like "yes actually i have a problem"
+            def is_exact_match(response: str, patterns: list) -> bool:
+                # Check exact match
+                if response in patterns:
+                    return True
+                # Check if it's a pattern with trailing punctuation (e.g., "yes.", "yes!")
+                for pattern in patterns:
+                    if response == pattern + "." or response == pattern + "!" or response == pattern + "?":
+                        return True
+                return False
+
+            if is_exact_match(user_response_normalized, yes_patterns):
+                # USER SAID YES - REDIRECT IMMEDIATELY
+                print(f"✅ ELIGIBILITY: User said YES - Redirecting to eligibility URL")
+                clear_eligibility_flag(session_id)
+                
+                # Record this turn in conversation context
+                from app.layer2.shared.session_manager import add_turn_record
+                from app.schemas.conversation_context import TurnRecord
+                turn = TurnRecord(
+                    turn_number=conv_context.current_turn + 1,
+                    user_input=transcription,
+                    user_input_normalized=state.normalized_text_en,
+                    user_language=eligibility_language,
+                    agent_routed_to="eligibility_handler",
+                    agent_response="[Redirecting to eligibility test]",
+                    routing_reason="Eligibility yes detected",
+                    metadata={"redirect_url": "https://bna-loan-eligibility-test.com"}
+                )
+                add_turn_record(session_id, turn)
+                
+                redirect_response_en = "Great! You can test your loan eligibility here: https://bna-loan-eligibility-test.com\n\nPlease fill out the quick assessment form. It will take about 2-3 minutes, and you'll get an instant eligibility result."
+                
+                # Translate to user's language
+                from app.layer3.translation.translator import translate_from_english
+                redirect_response_localized = translate_from_english(redirect_response_en, eligibility_language)
+                
+                # Deliver the response
+                from app.layer3.delivery import deliver_response
+                from app.schemas.conversation import ConversationState, SourceChannel
+                delivery_state = ConversationState(
+                    conversation_id=state.conversation_id,
+                    source_channel=SourceChannel.VOICE,
+                    source_language=eligibility_language,
+                    original_text=state.original_text,
+                    normalized_text_en=redirect_response_en,
+                    final_response_en=redirect_response_en,
+                    final_response_localized=redirect_response_localized,
+                )
+                audio_state = deliver_response(delivery_state)
+                
+                if audio_state.final_response_audio:
+                    import base64
+                    results["final_response_audio"] = base64.b64encode(audio_state.final_response_audio).decode("utf-8")
+                    results["audio_model_used"] = audio_state.audio_model_used
+                    results["audio_sample_rate"] = audio_state.audio_sample_rate
+                    results["final_response_localized"] = audio_state.final_response_localized
+                    add_to_history(session_id, text_for_ingestion, redirect_response_localized or redirect_response_en)
+                
+                results["summary"] = {
+                    "total_stages": 5,
+                    "successful_stages": 3,
+                    "conversation_id": str(state.conversation_id),
+                    "session_id": session_id,
+                    "eligibility_redirect": "yes",
+                    "redirect_url": "https://bna-loan-eligibility-test.com"
+                }
+                return results
+                
+            elif is_exact_match(user_response_normalized, no_patterns):
+                # USER SAID NO - STATIC RESPONSE
+                print(f"❌ ELIGIBILITY: User said NO - Sending static response")
+                clear_eligibility_flag(session_id)
+
+                # Mark that user declined eligibility test, don't ask again in this session
+                from app.layer2.shared.session_manager import set_eligibility_declined
+                set_eligibility_declined(session_id, True)
+                
+                # Record this turn in conversation context
+                from app.layer2.shared.session_manager import add_turn_record
+                from app.schemas.conversation_context import TurnRecord
+                turn = TurnRecord(
+                    turn_number=conv_context.current_turn + 1,
+                    user_input=transcription,
+                    user_input_normalized=state.normalized_text_en,
+                    user_language=eligibility_language,
+                    agent_routed_to="eligibility_handler",
+                    agent_response="Do you have other questions?",
+                    routing_reason="Eligibility no detected"
+                )
+                add_turn_record(session_id, turn)
+                
+                # Use language-appropriate response
+                if eligibility_language.lower() in ["fr", "french"]:
+                    no_response_text = "D'accord! Avez-vous d'autres questions?"
+                elif eligibility_language.lower() in ["ar", "arabic"]:
+                    no_response_text = "حسنا! هل لديك أسئلة أخرى؟"
+                else:
+                    no_response_text = "No problem! Do you have any other questions?"
+                
+                # Deliver the response
+                from app.layer3.delivery import deliver_response
+                from app.schemas.conversation import ConversationState, SourceChannel
+                delivery_state = ConversationState(
+                    conversation_id=state.conversation_id,
+                    source_channel=SourceChannel.VOICE,
+                    source_language=eligibility_language,
+                    original_text=state.original_text,
+                    normalized_text_en="Do you have other questions?",
+                    final_response_en="Do you have other questions?",
+                    final_response_localized=no_response_text,
+                )
+                audio_state = deliver_response(delivery_state)
+                
+                if audio_state.final_response_audio:
+                    import base64
+                    results["final_response_audio"] = base64.b64encode(audio_state.final_response_audio).decode("utf-8")
+                    results["audio_model_used"] = audio_state.audio_model_used
+                    results["audio_sample_rate"] = audio_state.audio_sample_rate
+                    results["final_response_localized"] = audio_state.final_response_localized
+                    add_to_history(session_id, text_for_ingestion, no_response_text)
+                
+                results["summary"] = {
+                    "total_stages": 5,
+                    "successful_stages": 3,
+                    "conversation_id": str(state.conversation_id),
+                    "session_id": session_id,
+                    "eligibility_response": "no"
+                }
+                return results
+        
         results["stages"]["ingestion"] = {
             "success": True,
             "conversation_id": str(state.conversation_id),
@@ -882,14 +1078,49 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         }
         raise HTTPException(500, f"Layer 1 ingestion failed: {str(e)}")
 
-    # Step 4: Pass to Layer 2 Orchestrator
-    # Step 3.5: Quick Knowledge-Base check (prefer KB answer when confident)
+    # Helper: decide whether loan followup should be injected (independent of KB)
+    def _is_loan_involved(st) -> bool:
+        req = getattr(st, "required_agents", None) or []
+        intent = getattr(st, "intent", None) or ""
+        return (
+            ("loan_agent" in req)
+            or any("loan" in a.lower() for a in req)
+            or ("loan" in str(intent).lower())
+        )
+
+    # Step 4: Orchestrator FIRST (so loan detection is based on agent choice, not KB)
+    try:
+        # STEP 2: Pass conversation history to orchestrator for context
+        if conv_context:
+            state.conversation_history = conv_context.get_previous_turns(n=3)
+            print(f"[Voice Pipeline] Passing {len(state.conversation_history)} previous turns to orchestrator")
+        
+        result_state = smart_pm_routing(state)
+
+        results["stages"]["orchestrator"] = {
+            "success": True,
+            "intent": result_state.intent,
+            "category": result_state.intent_category,
+            "confidence": result_state.orchestrator_context.get("confidence", 0.0),
+            "extraction_method": result_state.orchestrator_context.get("extraction_method", "unknown"),
+            "model_used": result_state.orchestrator_context.get("model_used", "unknown"),
+            "required_agents": result_state.required_agents,
+            "final_response": result_state.final_response_en,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Orchestrator processing failed: {str(e)}")
+
+    # Step 4.5: Quick Knowledge-Base check (prefer KB answer when confident)
+    # For loan intents: let KB run but don't skip graph - we need loan agent to set waiting state
+    loan_intents = ["check_loan_eligibility", "apply_for_loan", "loan_status", "apply_for_mortgage", "check_mortgage_payments"]
+    is_loan_intent = result_state.intent in loan_intents if hasattr(result_state, 'intent') else False
+    
     await send_status("searching_kb", detected_language)
     try:
         from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
         kb_system = IntelligentRAGSystem()
         import asyncio
-        # Load docs if needed
+
         if asyncio.iscoroutinefunction(kb_system.load_documents):
             await kb_system.load_documents()
         else:
@@ -904,21 +1135,33 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             "success": True,
             "answer": kb_result.get("answer", None),
             "confidence": kb_result.get("confidence", 0.0),
-            "documents_found": kb_result.get("documents_found", 0)
+            "documents_found": kb_result.get("documents_found", 0),
         }
 
-        # If KB has a confident answer, pass it through client support agent for English response
-        if kb_result.get("answer") and kb_result.get("confidence", 0.0) >= 0.6:
-            state.kb_result = kb_result.get("answer")
+        # For loan intents: store KB result but always go through graph routing
+        # For non-loan intents: if KB is confident, skip graph and return KB answer
+        if is_loan_intent:
+            # Store KB result for loan agent to use, but continue to graph routing
+            result_state.kb_result = kb_result.get("answer")
             results["stages"]["knowledge_base"]["used"] = True
-            results["stages"]["knowledge_base"]["answer"] = kb_result.get("answer")
+        elif kb_result.get("answer") and kb_result.get("confidence", 0.0) >= 0.6:
+            result_state.kb_result = kb_result.get("answer")
+            results["stages"]["knowledge_base"]["used"] = True
 
-            # Pass through client support agent to get English response
             await send_status("generating_response", detected_language)
             from app.layer2.client_support.agent import client_support_node
-            state = client_support_node(state)
-            english_response = state.final_response_en
+            result_state = client_support_node(result_state)
+            english_response = result_state.final_response_en
             results["agent_response"] = english_response
+
+            # Inject BEFORE security (and independent of KB)
+            loan_involved = _is_loan_involved(result_state)
+            # Only inject followup if user hasn't already declined eligibility test
+            from app.layer2.shared.session_manager import is_eligibility_declined
+            if loan_involved and not is_eligibility_declined(session_id):
+                LOAN_FOLLOWUP_PHRASE_EN = "Would you like to check your eligibility for this loan? Please answer Yes or No."
+                english_response = english_response + "\n\n" + LOAN_FOLLOWUP_PHRASE_EN
+            results["loan_followup_triggered"] = bool(loan_involved and not is_eligibility_declined(session_id))
 
             # Apply output validation/redaction
             try:
@@ -926,7 +1169,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 validated_response = validate_output(english_response)
                 results["stages"]["security_layer2"] = {
                     "success": True,
-                    "modified": validated_response != english_response
+                    "modified": validated_response != english_response,
                 }
                 english_response = validated_response
             except Exception as e:
@@ -943,42 +1186,27 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 conversation_id="voice-pipeline-kb",
                 source_channel=SourceChannel.VOICE,
                 source_language=detected_language,
-                original_text=state.original_text,
+                original_text=result_state.original_text,
                 normalized_text_en=english_response,
                 final_response_en=english_response,
-                final_response_localized=localized_response
+                final_response_localized=localized_response,
             )
             audio_state = deliver_response(delivery_state)
 
             if audio_state.final_response_audio:
                 import base64
-                results["final_response_audio"] = base64.b64encode(audio_state.final_response_audio).decode('utf-8')
+                results["final_response_audio"] = base64.b64encode(audio_state.final_response_audio).decode("utf-8")
                 results["audio_model_used"] = audio_state.audio_model_used
                 results["audio_sample_rate"] = audio_state.audio_sample_rate
                 results["final_response_localized"] = audio_state.final_response_localized
                 add_to_history(session_id, text_for_ingestion, localized_response or english_response)
 
-            # Return early since KB answered the user
             return results
     except Exception as e:
-        # KB lookup should not break the main pipeline
         logger.warning(f"[KnowledgeBase] KB quick-check failed: {e}")
         results["stages"]["knowledge_base"] = {"success": False, "error": str(e)}
 
     try:
-        result_state = smart_pm_routing(state)
-        
-        results["stages"]["orchestrator"] = {
-            "success": True,
-            "intent": result_state.intent,
-            "category": result_state.intent_category,
-            "confidence": result_state.orchestrator_context.get("confidence", 0.0),
-            "extraction_method": result_state.orchestrator_context.get("extraction_method", "unknown"),
-            "model_used": result_state.orchestrator_context.get("model_used", "unknown"),
-            "required_agents": result_state.required_agents,
-            "final_response": result_state.final_response_en
-        }
-        
         # Execute the graph to run proper agent flow
         from app.layer2.graph import _run_with_langgraph
         final_state = _run_with_langgraph(result_state)
@@ -991,6 +1219,19 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             
             # Step 1: Get English response from client_support
             english_response = final_state.final_response_en
+
+            # --- LOAN FOLLOWUP INJECTION (BEFORE SECURITY) ---
+            # Requirement: inject the followup sentence before the security layer runs,
+            # so the validated/translated response includes it.
+            loan_involved = _is_loan_involved(final_state)
+            # Only inject followup if user hasn't already declined eligibility test
+            from app.layer2.shared.session_manager import is_eligibility_declined
+            if loan_involved and not is_eligibility_declined(session_id):
+                LOAN_FOLLOWUP_PHRASE_EN = "Would you like to check your eligibility for this loan? Please answer Yes or No."
+                english_response = english_response + "\n\n" + LOAN_FOLLOWUP_PHRASE_EN
+
+            results["loan_followup_triggered"] = bool(loan_involved and not is_eligibility_declined(session_id))
+            # -------------------------------
 
             # Security Layer 2: NeMo Guard output validation
             try:
@@ -1103,6 +1344,33 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     if "orchestrator" in results["stages"] and results["stages"]["orchestrator"]["success"]:
         results["agent_response"] = results["stages"]["orchestrator"]["final_response"]
         results["selected_agent"] = results["stages"]["orchestrator"]["required_agents"][0] if results["stages"]["orchestrator"]["required_agents"] else "unknown"
+
+    # SAVE orchestrator context back to session for next turn
+    from app.layer2.shared.session_manager import save_orchestrator_context
+    if hasattr(result_state, 'orchestrator_context') and result_state.orchestrator_context:
+        save_orchestrator_context(session_id, result_state.orchestrator_context)
+        print(f"[Voice Pipeline] Saved orchestrator_context to session: {result_state.orchestrator_context}")
+
+    # STEP 6: Record turn after agent processing
+    if conv_context and results.get("agent_response"):
+        from app.layer2.shared.session_manager import add_turn_record
+        from app.schemas.conversation_context import TurnRecord
+        turn = TurnRecord(
+            turn_number=conv_context.current_turn + 1,
+            user_input=transcription,
+            user_input_normalized=state.normalized_text_en,
+            user_language=detected_language,
+            agent_routed_to=results.get("selected_agent", "unknown"),
+            agent_response=results["agent_response"],
+            intent=result_state.intent,
+            confidence=result_state.orchestrator_context.get("confidence", 0),
+            routing_reason="Intent-based routing",
+            metadata={
+                "audio_duration": "N/A",
+                "tts_model": results.get("audio_model_used"),
+            }
+        )
+        add_turn_record(session_id, turn)
 
     return results
 

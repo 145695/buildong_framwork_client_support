@@ -86,6 +86,21 @@ def smart_pm_routing(state: ConversationState) -> ConversationState:
     """
     Smart PM orchestrator in PLANNING MODE - shows intent, agents, and mission briefs without executing.
     """
+    # Get conversation history if available
+    previous_turns = getattr(state, 'conversation_history', [])
+    
+    # Build context string for LLM
+    history_context = ""
+    if previous_turns:
+        history_context = "Previous conversation:\n"
+        for turn in previous_turns:
+            history_context += f"User: {turn.user_input}\n"
+            history_context += f"Agent: {turn.agent_response}\n"
+    
+    # Use history in intent detection by appending to normalized text
+    if history_context:
+        state.normalized_text_en = history_context + f"\nCurrent: {state.normalized_text_en}"
+    
     # Use new router node for semantic agent selection
     state = router_node(state)
     

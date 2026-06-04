@@ -9,11 +9,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #060d09;
-            --accent-color: #00e87a;
-            --text-color: #c2ddc9;
-            --muted-color: #6b9478;
+            --bg-color: #FAFAF8;
+            --accent-color: #4CAF50;
+            --accent-active: #2E7D32;
+            --text-color: #333333;
+            --muted-color: #666666;
             --danger-color: #ff5555;
+            --warning-color: #ffc107;
+            --bubble-idle: #4CAF50;
+            --bubble-active: #2E7D32;
         }
 
         * {
@@ -33,6 +37,7 @@
             align-items: center;
             justify-content: center;
             position: relative;
+            transition: background-color 0.5s ease;
         }
 
         .mono {
@@ -48,7 +53,7 @@
             max-width: 600px;
             padding: 20px;
             height: 100%;
-            padding-bottom: 80px; /* Space for end call button */
+            padding-bottom: 80px;
         }
 
         /* Orb and Rings */
@@ -69,44 +74,84 @@
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            border: 2px solid rgba(0, 232, 122, 0.4);
+            border: 3px solid rgba(76, 175, 80, 0.3);
             opacity: 0;
             pointer-events: none;
         }
 
-        body.recording .orb-ring:nth-child(1) { animation: expandRing 1.5s infinite 0s; }
-        body.recording .orb-ring:nth-child(2) { animation: expandRing 1.5s infinite 0.5s; }
-        body.recording .orb-ring:nth-child(3) { animation: expandRing 1.5s infinite 1s; }
+        body.recording .orb-ring:nth-child(1) { animation: expandRing 2s infinite 0s; }
+        body.recording .orb-ring:nth-child(2) { animation: expandRing 2s infinite 0.6s; }
+        body.recording .orb-ring:nth-child(3) { animation: expandRing 2s infinite 1.2s; }
 
         @keyframes expandRing {
-            0% { transform: scale(0.8); opacity: 0.8; }
-            100% { transform: scale(1.6); opacity: 0; }
+            0% { transform: scale(0.9); opacity: 0.6; }
+            100% { transform: scale(1.8); opacity: 0; }
         }
 
         .orb {
             position: relative;
             width: 160px;
             height: 160px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 35% 35%, #00e87a 0%, #007a40 50%, #002211 100%);
-            box-shadow: 0 0 40px rgba(0, 232, 122, 0.3), inset 0 0 20px rgba(255,255,255,0.2);
-            animation: breathe 4s ease-in-out infinite;
+            border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%;
+            background: radial-gradient(circle at 35% 35%, var(--bubble-idle) 0%, #388E3C 50%, #1B5E20 100%);
+            box-shadow: 0 8px 32px rgba(76, 175, 80, 0.3), inset 0 0 20px rgba(255,255,255,0.3);
+            animation: breathe 3s ease-in-out infinite, float 4s ease-in-out infinite, flowy 8s ease-in-out infinite;
             z-index: 10;
+            transition: all 0.5s ease;
         }
 
         @keyframes breathe {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(0, 232, 122, 0.2); }
-            50% { transform: scale(1.04); box-shadow: 0 0 50px rgba(0, 232, 122, 0.4); }
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes flowy {
+            0% { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; }
+            20% { border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%; }
+            40% { border-radius: 50% 50% 60% 40% / 40% 60% 50% 50%; }
+            60% { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
+            80% { border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%; }
+            100% { border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; }
         }
 
         body.recording .orb {
-            animation: pulse 1s ease-in-out infinite;
-            background: radial-gradient(circle at 35% 35%, #33ffa0 0%, #00e87a 40%, #007a40 100%);
+            animation: pulse 1.5s ease-in-out infinite, flowy 4s ease-in-out infinite;
+            background: radial-gradient(circle at 35% 35%, var(--bubble-active) 0%, #388E3C 40%, #1B5E20 100%);
+            box-shadow: 0 12px 40px rgba(46, 125, 50, 0.5), inset 0 0 20px rgba(255,255,255,0.4);
         }
 
         @keyframes pulse {
-            0%, 100% { transform: scale(1.02); box-shadow: 0 0 50px rgba(0, 232, 122, 0.4); }
-            50% { transform: scale(1.08); box-shadow: 0 0 80px rgba(0, 232, 122, 0.7); }
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        body.speaking .orb {
+            animation: morph 0.3s ease-in-out infinite alternate, flowy 2s ease-in-out infinite;
+            background: radial-gradient(circle at 35% 35%, var(--bubble-active) 0%, #388E3C 40%, #2E7D32 100%);
+        }
+
+        @keyframes morph {
+            0% { transform: scale(1); border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%; }
+            25% { transform: scale(1.15); border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%; }
+            50% { transform: scale(1.2); border-radius: 50% 50% 60% 40% / 40% 60% 50% 50%; }
+            75% { transform: scale(1.15); border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
+            100% { transform: scale(1.2); border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%; }
+        }
+
+        /* Waiting state for followup */
+        .orb-container.waiting .orb {
+            animation: pulse-waiting 2s ease-in-out infinite;
+            background: radial-gradient(circle at 35% 35%, #ffc107 0%, #ff9800 50%, #e65100 100%);
+            box-shadow: 0 0 40px rgba(255, 193, 7, 0.4);
+        }
+        @keyframes pulse-waiting {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.03); opacity: 1; }
         }
 
         /* Agent Label */
@@ -121,12 +166,14 @@
         /* Waves */
         .waves {
             display: flex;
-            gap: 4px;
-            height: 30px;
+            gap: 6px;
+            height: 120px;
             align-items: center;
-            margin-bottom: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.5s ease;
+            position: relative;
         }
 
         body.recording .waves {
@@ -134,29 +181,30 @@
         }
 
         .wave-bar {
-            width: 4px;
-            background-color: var(--accent-color);
-            border-radius: 2px;
-            height: 4px;
+            width: 8px;
+            background: linear-gradient(to top, var(--accent-color), var(--accent-active));
+            border-radius: 10px;
+            height: 10px;
+            transition: height 0.1s ease;
         }
 
         body.recording .wave-bar {
-            animation: wave 0.8s ease-in-out infinite alternate;
+            animation: wave 0.6s ease-in-out infinite alternate;
         }
 
-        body.recording .wave-bar:nth-child(1) { animation-delay: 0.1s; }
-        body.recording .wave-bar:nth-child(2) { animation-delay: 0.3s; }
-        body.recording .wave-bar:nth-child(3) { animation-delay: 0.2s; }
-        body.recording .wave-bar:nth-child(4) { animation-delay: 0.5s; }
-        body.recording .wave-bar:nth-child(5) { animation-delay: 0.1s; }
-        body.recording .wave-bar:nth-child(6) { animation-delay: 0.4s; }
-        body.recording .wave-bar:nth-child(7) { animation-delay: 0.2s; }
-        body.recording .wave-bar:nth-child(8) { animation-delay: 0.5s; }
-        body.recording .wave-bar:nth-child(9) { animation-delay: 0.3s; }
+        body.recording .wave-bar:nth-child(1) { animation-delay: 0.05s; }
+        body.recording .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+        body.recording .wave-bar:nth-child(3) { animation-delay: 0.15s; }
+        body.recording .wave-bar:nth-child(4) { animation-delay: 0.2s; }
+        body.recording .wave-bar:nth-child(5) { animation-delay: 0.25s; }
+        body.recording .wave-bar:nth-child(6) { animation-delay: 0.3s; }
+        body.recording .wave-bar:nth-child(7) { animation-delay: 0.35s; }
+        body.recording .wave-bar:nth-child(8) { animation-delay: 0.4s; }
+        body.recording .wave-bar:nth-child(9) { animation-delay: 0.45s; }
 
         @keyframes wave {
-            0% { height: 6px; }
-            100% { height: 26px; }
+            0% { height: 15px; }
+            100% { height: 100px; }
         }
 
         /* Status & Timer */
@@ -166,6 +214,7 @@
             min-height: 20px;
             margin-bottom: 5px;
             text-align: center;
+            transition: color 0.3s;
         }
 
         .timer-text {
@@ -201,61 +250,145 @@
             font-weight: 300;
         }
 
-        /* Audio Player */
+        /* Audio Player - Hidden but Functional */
         #audioContainer {
-            margin-top: 25px;
-            width: 100%;
-            max-width: 320px;
+            position: absolute;
+            width: 0;
+            height: 0;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
         }
         
         audio {
-            width: 100%;
-            height: 40px;
-            outline: none;
-            border-radius: 20px;
-        }
-        
-        audio::-webkit-media-controls-panel {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        audio::-webkit-media-controls-current-time-display,
-        audio::-webkit-media-controls-time-remaining-display {
-            color: var(--text-color);
+            width: 0;
+            height: 0;
+            display: none;
         }
 
         /* End Call Button */
         .end-call-btn {
             position: absolute;
             bottom: 40px;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background-color: var(--danger-color);
-            color: white;
-            border: none;
-            font-size: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            padding: 14px 32px;
+            border-radius: 50px;
+            background-color: white;
+            color: var(--danger-color);
+            border: 2px solid var(--danger-color);
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(255, 85, 85, 0.4);
-            transition: transform 0.2s, background-color 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
             z-index: 50;
         }
 
         .end-call-btn:hover {
-            transform: scale(1.05);
-            background-color: #e04444;
+            background-color: var(--danger-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 85, 85, 0.3);
         }
 
-        /* Hide elements meant to be strictly hidden to not break JS */
-        #resultsSection { display: none !important; }
+        /* Record Button (Pill Shape) */
+        .record-btn {
+            position: absolute;
+            bottom: 120px;
+            padding: 16px 32px;
+            border-radius: 50px;
+            background-color: white;
+            color: var(--text-color);
+            border: 2px solid #e0e0e0;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .record-btn:hover {
+            background-color: #f8f8f8;
+            border-color: #d0d0d0;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .record-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+
+        .record-btn.recording {
+            background-color: white;
+            color: var(--accent-color);
+            border-color: var(--accent-color);
+            box-shadow: 0 4px 20px rgba(76, 175, 80, 0.2);
+        }
+
+        .record-btn.recording:hover {
+            background-color: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+            box-shadow: 0 6px 25px rgba(76, 175, 80, 0.3);
+        }
+
+        /* Particle Background */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background-color: rgba(76, 175, 80, 0.3);
+            border-radius: 50%;
+            animation: floatParticle 15s infinite linear;
+        }
+
+        @keyframes floatParticle {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        /* Minimal voice-call UI: keep only the orb/waves + end-call button */
+        #voiceOutputSection { display: none !important; visibility: hidden !important; }
+        #resultsSection { display: none !important; visibility: hidden !important; }
+        .agent-label { display: none !important; }
+        #mic-status { display: none !important; }
+        #call-timer { display: none !important; }
+        /* Keep audio container in DOM but invisible */
+        #audioContainer { position: absolute; width: 0; height: 0; opacity: 0; visibility: hidden; pointer-events: none; }
     </style>
 </head>
 <body>
+    <!-- Particle Background -->
+    <div class="particles" id="particles"></div>
 
     <div class="call-screen">
-        <!-- Orb Mic Button -->
         <div class="orb-container" id="mic-button"
              onmousedown="startRecording()"
              onmouseup="stopRecording()"
@@ -268,10 +401,8 @@
             <div class="orb"></div>
         </div>
 
-        <!-- Agent Label -->
         <div class="agent-label mono">BNA · Agent IA</div>
 
-        <!-- Waves -->
         <div class="waves" id="waves">
             <div class="wave-bar"></div><div class="wave-bar"></div>
             <div class="wave-bar"></div><div class="wave-bar"></div>
@@ -280,11 +411,19 @@
             <div class="wave-bar"></div>
         </div>
 
-        <!-- Status & Timer -->
         <div id="mic-status" class="status-text mono">Prêt à écouter...</div>
+
+        <!-- New Record Button (Pill Shape) -->
+        <button class="record-btn" id="record-btn"
+                onmousedown="startRecording()"
+                onmouseup="stopRecording()"
+                onmouseleave="stopRecording()"
+                ontouchstart="startRecording()"
+                ontouchend="stopRecording()">
+            <span id="record-label">Hold to speak</span>
+        </button>
         <div id="call-timer" class="timer-text mono">00:00</div>
 
-        <!-- Output Section -->
         <div id="voiceOutputSection" style="display: none;">
             <div id="localizedResponse" class="response-text"></div>
             
@@ -293,7 +432,6 @@
                     <source id="audioSource" type="audio/wav">
                 </audio>
                 
-                <!-- Hidden components to keep JS references valid without visual clutter -->
                 <div style="display: none;">
                     <span id="detectedLang"></span>
                     <span id="audioModel"></span>
@@ -304,10 +442,8 @@
         </div>
     </div>
 
-    <!-- Fixed Bottom End Call -->
-    <button class="end-call-btn" onclick="endCall()">📵</button>
+    <button class="end-call-btn" onclick="endCall()">End Call</button>
 
-    <!-- Hidden dummy elements to preserve JS stability (e.g. innerHTML writes in displayResults) -->
     <div id="resultsSection">
         <div id="statusBadge"></div>
         <div id="progressFill"></div>
@@ -318,6 +454,42 @@
     <input type="file" id="audioInput" style="display: none;">
 
     <script>
+        // --- PARTICLE SYSTEM ---
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 20;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 15 + 's';
+                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+                particle.style.width = (4 + Math.random() * 4) + 'px';
+                particle.style.height = particle.style.width;
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // Initialize particles on load
+        window.addEventListener('load', createParticles);
+
+        // --- INJECTED PROXIES & LOGIC ---
+        const MINIMAL_CALL_UI = true;
+        window.isFollowupMode = false;
+        window.followupRetries = 0;
+        window.lastDetectedLanguage = 'en';
+        window.followupTimeout = null;
+
+        const OriginalWebSocket = window.WebSocket;
+        const originalSend = OriginalWebSocket.prototype.send;
+        OriginalWebSocket.prototype.send = function(data) {
+            if (window.isFollowupMode && !this._followupSent) {
+                originalSend.call(this, JSON.stringify({type: 'set_is_followup', value: true}));
+                this._followupSent = true;
+            }
+            originalSend.call(this, data);
+        };
 
 
         // WebSocket Audio Streaming (Phase 1)
@@ -386,7 +558,7 @@
                             updateMicStatus(`${data.message}`, '#ffc107');
                         } else if (data.type === 'status_audio') {
                             console.log('[WebSocket] Status Audio:', data.stage);
-                            // Play the status audio
+                            // Play status audio in background (minimal UI mode)
                             if (data.audio) {
                                 playAudio(data.audio);
                             }
@@ -400,7 +572,18 @@
                             console.log('[WebSocket] Pipeline Result:', data.data);
                             updateMicStatus('Pipeline complete!', '#28a745');
 
-                            // Show results section and display pipeline results
+                            // Always play final audio in background, even in minimal UI
+                            if (data.data.final_response_audio) {
+                                playAudio(`data:audio/wav;base64,${data.data.final_response_audio}`);
+                            }
+
+                            // In minimal UI mode, skip all result display
+                            if (MINIMAL_CALL_UI) {
+                                console.log('[Minimal UI] Skipping result display');
+                                return;
+                            }
+
+                            // Keep followup / redirect logic, but don't render result panels in minimal UI
                             const resultsSection = document.getElementById('resultsSection');
                             if (resultsSection) {
                                 resultsSection.style.display = 'block';
@@ -450,9 +633,18 @@
                     // Send as binary
                     ws.send(pcm16.buffer);
                 };
-                
+
                 isRecording = true;
                 document.body.classList.add('recording');
+
+                // Update record button styling
+                const recordBtn = document.getElementById('record-btn');
+                const recordLabel = document.getElementById('record-label');
+                if (recordBtn) {
+                    recordBtn.classList.add('recording');
+                    recordLabel.textContent = 'Release to send';
+                }
+
                 console.log('[Audio] Recording started');
                 
             } catch (error) {
@@ -463,9 +655,18 @@
 
         function stopRecording() {
             if (!isRecording) return;
-            
+
             isRecording = false;
             document.body.classList.remove('recording');
+
+            // Reset record button styling
+            const recordBtn = document.getElementById('record-btn');
+            const recordLabel = document.getElementById('record-label');
+            if (recordBtn) {
+                recordBtn.classList.remove('recording');
+                recordLabel.textContent = 'Hold to speak';
+            }
+
             console.log('[Audio] Recording stopped');
             
             // Send end_of_speech signal
@@ -503,7 +704,22 @@
         function playAudio(audioDataUrl) {
             try {
                 const audio = new Audio(audioDataUrl);
+                audio.volume = 1.0;
+
+                // Add speaking state when audio starts
+                audio.addEventListener('play', () => {
+                    document.body.classList.add('speaking');
+                    console.log('[Audio] Speaking state activated');
+                });
+
+                // Remove speaking state when audio ends
+                audio.addEventListener('ended', () => {
+                    document.body.classList.remove('speaking');
+                    console.log('[Audio] Speaking state deactivated');
+                });
+
                 audio.play().catch(e => console.error('Error playing audio:', e));
+                console.log('[Audio] Playing audio in background');
             } catch (e) {
                 console.error('Error creating audio element:', e);
             }
@@ -917,6 +1133,7 @@
         }
 
         function displayVoiceOutput(data) {
+            if (MINIMAL_CALL_UI) return;
             // Always show the voice output section
             voiceOutputSection.style.display = 'block';
 
@@ -972,8 +1189,68 @@
         }
     
     
+        
+        // Wrap displayResults cleanly to handle followup fast-path
+        const originalDisplayResults = displayResults;
+        displayResults = function(data) {
+            if (data.action === 'redirect') {
+                window.location.href = '/loan-eligibility-form?session_id=' + sessionId + '&lang=' + window.lastDetectedLanguage;
+                return;
+            }
+            if (data.action === 'continue') {
+                dismissFollowup();
+                return;
+            }
+            if (data.action === 'retry') {
+                window.followupRetries++;
+                if (window.followupRetries > 2) {
+                    dismissFollowup();
+                } else {
+                    document.getElementById('mic-button').classList.add('waiting');
+                    const micStatus = document.getElementById('mic-status');
+                    micStatus.textContent = "Je n'ai pas compris, répondez Oui ou Non";
+                    micStatus.style.color = '#ff5555';
+                    resetFollowupTimeout();
+                }
+                return;
+            }
+            
+            // Standard execution
+            originalDisplayResults(data);
+            
+            // Check if pipeline response triggers follow-up
+            if (data.loan_followup_triggered) {
+                window.isFollowupMode = true;
+                window.followupRetries = 0;
+                window.lastDetectedLanguage = data.stages?.whisper_stt?.detected_language || 'en';
+                
+                document.getElementById('mic-button').classList.add('waiting');
+                const micStatus = document.getElementById('mic-status');
+                micStatus.textContent = 'Oui / Non ?';
+                micStatus.style.color = '#ffc107';
+                
+                resetFollowupTimeout();
+            }
+        };
 
-        // Additional Logic for the new UI elements
+        function dismissFollowup() {
+            window.isFollowupMode = false;
+            window.followupRetries = 0;
+            clearTimeout(window.followupTimeout);
+            document.getElementById('mic-button').classList.remove('waiting');
+            const micStatus = document.getElementById('mic-status');
+            micStatus.textContent = 'Ready to speak';
+            micStatus.style.color = '#c2ddc9';
+        }
+
+        function resetFollowupTimeout() {
+            clearTimeout(window.followupTimeout);
+            window.followupTimeout = setTimeout(() => {
+                dismissFollowup();
+            }, 15000);
+        }
+
+        // Additional UI Logic
         (function() {
             let callInterval;
             let callSeconds = 0;
@@ -993,7 +1270,6 @@
                 callSeconds = 0;
                 timerEl.textContent = '00:00';
                 
-                // Fade out previous response
                 voSection.style.opacity = '0';
                 setTimeout(() => {
                     if(voSection.style.opacity === '0') {
@@ -1020,7 +1296,6 @@
             orbBtn.addEventListener('mouseleave', stopTimerUI);
             orbBtn.addEventListener('touchend', stopTimerUI);
 
-            // Fade in response seamlessly when displayVoiceOutput is called
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     if (mutation.attributeName === 'style') {
