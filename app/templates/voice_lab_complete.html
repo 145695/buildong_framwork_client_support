@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BNA Voice Lab</title>
+    <title>MACES</title>
+    <link rel="icon" type="image/png" href="/static/icons/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet">
@@ -633,9 +634,24 @@
                         } else if (data.type === 'response_text') {
                             setStatus('Réponse reçue');
                         } else if (data.type === 'pipeline_result') {
+                            console.log('[WebSocket] Pipeline Result:', data.data);
+                            console.log('[WebSocket] end_call:', data.data.end_call);
+                            console.log('[WebSocket] redirect_url:', data.data.redirect_url);
                             setStatus('Prêt à écouter');
                             if (data.data.final_response_audio) {
-                                playAudio(`data:audio/wav;base64,${data.data.final_response_audio}`);
+                                // Check if call should end and redirect after audio finishes
+                                if (data.data.end_call && data.data.redirect_url) {
+                                    console.log('[WebSocket] End call flag detected, will redirect after audio');
+                                    playAudioWithRedirect(`data:audio/wav;base64,${data.data.final_response_audio}`, data.data.redirect_url);
+                                } else {
+                                    playAudio(`data:audio/wav;base64,${data.data.final_response_audio}`);
+                                }
+                            } else {
+                                // No audio, redirect immediately if end_call flag is set
+                                if (data.data.end_call && data.data.redirect_url) {
+                                    console.log('[WebSocket] No audio, redirecting immediately');
+                                    window.location.href = data.data.redirect_url;
+                                }
                             }
                             if (MINIMAL_CALL_UI) return;
                             const rs = document.getElementById('resultsSection');
@@ -726,6 +742,33 @@
             }
         }
 
+        function playAudioWithRedirect(audioDataUrl, redirectUrl) {
+            try {
+                document.body.classList.add('speaking');
+                setStatus('Réponse en cours…');
+                const audio = new Audio(audioDataUrl);
+                audio.volume = 1.0;
+                audio.addEventListener('ended', () => {
+                    document.body.classList.remove('speaking');
+                    console.log('[Audio] Finished, redirecting to:', redirectUrl);
+                    window.location.href = redirectUrl;
+                });
+                audio.play().catch(e => {
+                    console.error('Error playing audio:', e);
+                    document.body.classList.remove('speaking');
+                    // Redirect even if audio fails
+                    console.log('[Audio] Error, redirecting anyway to:', redirectUrl);
+                    window.location.href = redirectUrl;
+                });
+            } catch(e) {
+                console.error('Error creating audio element:', e);
+                document.body.classList.remove('speaking');
+                // Redirect even if audio fails
+                console.log('[Audio] Error, redirecting anyway to:', redirectUrl);
+                window.location.href = redirectUrl;
+            }
+        }
+
         // ── COMPAT REFS ────────────────────────────────────────────────
         const audioInput      = document.getElementById('audioInput');
         const resultsSection  = document.getElementById('resultsSection');
@@ -755,7 +798,7 @@
             if (sessionId) {
                 try { await fetch(`/session/${sessionId}`, { method: 'DELETE' }); } catch(e) {}
             }
-            window.location.href = '/voice-lab';
+            window.location.href = '/';
         }
 
         async function processFullPipeline() {

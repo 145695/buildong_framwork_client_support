@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # TEST QUESTIONS  (French, directly from policy documents)
 # ─────────────────────────────────────────────────────────────────────────────
-# ⚠️  Verify every question maps to actual content in your PDFs before running.
+# WARNING: Verify every question maps to actual content in your PDFs before running.
 # Source tags are for your traceability only; the evaluator does not use them.
 
 TEST_QUESTIONS: List[Dict[str, str]] = [
@@ -242,10 +242,10 @@ class RAGEvaluator:
         self.results: List[EvalResult] = []
 
     async def initialize(self):
-        logger.info("🚀  Initialising RAG system …")
+        logger.info("[EVAL] Initialising RAG system …")
         self.rag = IntelligentRAGSystem()
         await self.rag.load_documents()
-        logger.info(f"✅  {len(self.rag.document_chunks)} chunks loaded")
+        logger.info(f"[EVAL] {len(self.rag.document_chunks)} chunks loaded")
 
     # ── single question ───────────────────────────────────────────────────────
 
@@ -278,7 +278,7 @@ class RAGEvaluator:
         chunks_available = bool(chunks)
         if not chunks_available:
             logger.warning(
-                "  ⚠️  'retrieved_chunks' not in RAG output → "
+                "  WARNING: 'retrieved_chunks' not in RAG output → "
                 "Retrieval Precision will be skipped (N/A) for this question.\n"
                 "  Fix: return 'retrieved_chunks' from IntelligentRAGSystem.ask_question()."
             )
@@ -310,19 +310,19 @@ class RAGEvaluator:
             for i, chunk in enumerate(chunks):
                 try:
                     is_rel = await self.judge.is_chunk_relevant(question, chunk.get("content", ""))
-                    logger.info(f"  chunk {i+1}: {'✅' if is_rel else '❌'}")
+                    logger.info(f"  chunk {i+1}: {'PASS' if is_rel else 'FAIL'}")
                     relevant += int(is_rel)
                 except Exception as e:
                     logger.error(f"  chunk {i+1}: judge failed → {e}")
             r.retrieval_precision = relevant / len(chunks)
         else:
             r.retrieval_precision = float("nan")   # N/A — excluded from average
-        logger.info(f"  📐  Retrieval Precision = {r.retrieval_precision if not (isinstance(r.retrieval_precision, float) and r.retrieval_precision != r.retrieval_precision) else 'N/A'}")
+        logger.info(f"  [EVAL] Retrieval Precision = {r.retrieval_precision if not (isinstance(r.retrieval_precision, float) and r.retrieval_precision != r.retrieval_precision) else 'N/A'}")
 
         # ── Metric 2 : Answer Relevance ───────────────────────────────────────
-        logger.info("  💬  Judging answer relevance …")
+        logger.info("  [EVAL] Judging answer relevance …")
         r.answer_relevance = await self.judge.rate_answer_relevance(question, r.answer)
-        logger.info(f"  💬  Answer Relevance    = {r.answer_relevance:.3f}")
+        logger.info(f"  [EVAL] Answer Relevance    = {r.answer_relevance:.3f}")
 
         # ── Metric 3 : Faithfulness ───────────────────────────────────────────
         if chunks_available:
@@ -341,14 +341,14 @@ class RAGEvaluator:
     async def run(self, delay: float = 2.0):
         await self.initialize()
         total = len(TEST_QUESTIONS)
-        logger.info(f"\n🎯  Evaluating {total} questions …\n")
+        logger.info(f"\n[EVAL] Evaluating {total} questions …\n")
 
         for i, entry in enumerate(TEST_QUESTIONS, 1):
             logger.info(f"{'='*65}")
             logger.info(f"  Progress: {i}/{total}")
             await self._evaluate_one(entry)
             if i < total:
-                logger.info(f"  ⏳ Waiting {delay}s before next question …")
+                logger.info(f"  [EVAL] Waiting {delay}s before next question …")
                 await asyncio.sleep(delay)
 
         self._print_summary()
@@ -442,13 +442,13 @@ class RAGEvaluator:
                 row = asdict(r)
                 row["sources"] = "; ".join(row.get("sources") or [])
                 w.writerow({k: row.get(k, "") for k in fields})
-        logger.info(f"💾  CSV  → {path}")
+        logger.info(f"[EVAL] CSV  → {path}")
 
     def _save_json(self, path: str = "rag_eval_results.json"):
         payload = {"summary": self._summary(), "results": [asdict(r) for r in self.results]}
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
-        logger.info(f"💾  JSON → {path}")
+        logger.info(f"[EVAL] JSON → {path}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # CHARTS  (4-panel PNG)

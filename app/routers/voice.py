@@ -211,8 +211,8 @@ async def test_tts(req: TTSRequest):
     # Fix encoding issue by ensuring proper UTF-8 handling
     try:
         # Debug the original text and encoding
-        print(f"Original text: {repr(req.text)}")
-        print(f"Text type: {type(req.text)}")
+        print(f"[TTS] Original text: {repr(req.text)}")
+        print(f"[TTS] Text type: {type(req.text)}")
         
         # Ensure text is properly encoded for display
         display_text = req.text
@@ -221,22 +221,22 @@ async def test_tts(req: TTSRequest):
             try:
                 display_text = req.text.encode('utf-8', errors='replace').decode('utf-8')
             except UnicodeEncodeError as e:
-                print(f"Encoding error: {e}")
+                print(f"[TTS] Encoding error: {e}")
                 display_text = req.text  # Fallback to original
         
-        print(f"TTS Request: text='{display_text}', language='{req.language}'")
-        print(f"Available models: {list(ml_models.keys())}")
+        print(f"[TTS] Request: text='{display_text}', language='{req.language}'")
+        print(f"[TTS] Available models: {list(ml_models.keys())}")
     except Exception as e:
-        print(f"Text processing error: {e}")
-        print(f"TTS Request: text='{req.text}', language='{req.language}'")
-        print(f"Available models: {list(ml_models.keys())}")
+        print(f"[TTS] Text processing error: {e}")
+        print(f"[TTS] Request: text='{req.text}', language='{req.language}'")
+        print(f"[TTS] Available models: {list(ml_models.keys())}")
 
     if req.language == "ar":
         # Use Habibi-TTS as primary method for Arabic text
         habibi = ml_models.get("tts_habibi")
         if habibi is not None:
             try:
-                print("Using Habibi-TTS for Arabic TTS...")
+                print("[TTS] Using Habibi-TTS for Arabic TTS...")
                 wav, sr, _ = habibi.infer(
                     ref_file=None,  # Don't require reference file
                     ref_text="",
@@ -245,11 +245,11 @@ async def test_tts(req: TTSRequest):
                 audio_data = wav
                 sample_rate = sr
                 model_used = "habibi-tts (ALG)"
-                print(f"Arabic TTS generated with Habibi: shape={audio_data.shape if hasattr(audio_data, 'shape') else 'unknown'}")
+                print(f"[TTS] Arabic TTS generated with Habibi: shape={audio_data.shape if hasattr(audio_data, 'shape') else 'unknown'}")
             except Exception as e:
-                print(f"Habibi-TTS error: {e}")
+                print(f"[TTS] Habibi-TTS error: {e}")
                 # Fall back to gTTS if Habibi fails
-                print("Falling back to gTTS for Arabic TTS...")
+                print("[TTS] Falling back to gTTS for Arabic TTS...")
                 try:
                     from gtts import gTTS
                     
@@ -277,30 +277,30 @@ async def test_tts(req: TTSRequest):
                         sample_rate = audio.frame_rate
                         
                         model_used = "gTTS (Arabic fallback)"
-                        print(f"Arabic TTS generated with gTTS fallback: shape={audio_data.shape}, sample_rate={sample_rate}")
+                        print(f"[TTS] Arabic TTS generated with gTTS fallback: shape={audio_data.shape}, sample_rate={sample_rate}")
                         
                     finally:
                         # Clean up temp file with proper error handling
                         try:
                             if os.path.exists(temp_filename):
                                 os.unlink(temp_filename)
-                                print(f"Cleaned up temp file: {temp_filename}")
+                                print(f"[TTS] Cleaned up temp file: {temp_filename}")
                         except Exception as cleanup_error:
-                            print(f"Warning: Could not clean up temp file {temp_filename}: {cleanup_error}")
+                            print(f"[TTS] WARNING: Could not clean up temp file {temp_filename}: {cleanup_error}")
                             
                 except ImportError:
-                    print("gTTS not available, falling back to Kokoro with transliteration")
+                    print("[TTS] gTTS not available, falling back to Kokoro with transliteration")
                     # Final fallback to Kokoro English for Arabic text
                     kokoro = ml_models.get("tts_kokoro_en")
                     if kokoro is None:
                         raise HTTPException(503, "No TTS models available for Arabic")
                     
                     try:
-                        print("Generating Arabic TTS with Kokoro English fallback...")
+                        print("[TTS] Generating Arabic TTS with Kokoro English fallback...")
                         generator = kokoro(req.text, voice="af_heart")
                         chunks = []
                         for i, (phonemes, duration, audio) in enumerate(generator):
-                            print(f"Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
+                            print(f"[TTS] Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
                             chunks.append(audio)
                         
                         if not chunks:
@@ -308,13 +308,13 @@ async def test_tts(req: TTSRequest):
                         
                         audio_data = np.concatenate(chunks)
                         model_used = "kokoro-82m (EN fallback for Arabic)"
-                        print(f"Arabic fallback TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
+                        print(f"[TTS] Arabic fallback TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
                     except Exception as e:
-                        print(f"Arabic fallback TTS error: {e}")
+                        print(f"[TTS] Arabic fallback TTS error: {e}")
                         raise HTTPException(500, f"Arabic TTS fallback failed: {str(e)}")
         else:
             # Habibi-TTS not available, use gTTS as primary
-            print("Habibi-TTS not available, using gTTS for Arabic TTS...")
+            print("[TTS] Habibi-TTS not available, using gTTS for Arabic TTS...")
             try:
                 from gtts import gTTS
                 
@@ -342,30 +342,30 @@ async def test_tts(req: TTSRequest):
                     sample_rate = audio.frame_rate
                     
                     model_used = "gTTS (Arabic)"
-                    print(f"Arabic TTS generated with gTTS: shape={audio_data.shape}, sample_rate={sample_rate}")
+                    print(f"[TTS] Arabic TTS generated with gTTS: shape={audio_data.shape}, sample_rate={sample_rate}")
                     
                 finally:
                     # Clean up temp file with proper error handling
                     try:
                         if os.path.exists(temp_filename):
                             os.unlink(temp_filename)
-                            print(f"Cleaned up temp file: {temp_filename}")
+                            print(f"[TTS] Cleaned up temp file: {temp_filename}")
                     except Exception as cleanup_error:
-                        print(f"Warning: Could not clean up temp file {temp_filename}: {cleanup_error}")
+                        print(f"[TTS] WARNING: Could not clean up temp file {temp_filename}: {cleanup_error}")
                         
             except ImportError:
-                print("gTTS not available, falling back to Kokoro with transliteration")
+                print("[TTS] gTTS not available, falling back to Kokoro with transliteration")
                 # Final fallback to Kokoro English for Arabic text
                 kokoro = ml_models.get("tts_kokoro_en")
                 if kokoro is None:
                     raise HTTPException(503, "No TTS models available for Arabic")
                 
                 try:
-                    print("Generating Arabic TTS with Kokoro English fallback...")
+                    print("[TTS] Generating Arabic TTS with Kokoro English fallback...")
                     generator = kokoro(req.text, voice="af_heart")
                     chunks = []
                     for i, (phonemes, duration, audio) in enumerate(generator):
-                        print(f"Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
+                        print(f"[TTS] Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
                         chunks.append(audio)
                     
                     if not chunks:
@@ -373,9 +373,9 @@ async def test_tts(req: TTSRequest):
                     
                     audio_data = np.concatenate(chunks)
                     model_used = "kokoro-82m (EN fallback for Arabic)"
-                    print(f"Arabic fallback TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
+                    print(f"[TTS] Arabic fallback TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
                 except Exception as e:
-                    print(f"Arabic fallback TTS error: {e}")
+                    print(f"[TTS] Arabic fallback TTS error: {e}")
                     raise HTTPException(500, f"Arabic TTS fallback failed: {str(e)}")
 
     elif req.language == "fr":
@@ -383,11 +383,11 @@ async def test_tts(req: TTSRequest):
         if kokoro is None:
             raise HTTPException(503, "Kokoro FR not loaded")
         try:
-            print("Generating French TTS...")
+            print("[TTS] Generating French TTS...")
             generator = kokoro(req.text, voice="ff_siwis")
             chunks = []
             for i, (phonemes, duration, audio) in enumerate(generator):
-                print(f"Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
+                print(f"[TTS] Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
                 chunks.append(audio)
             
             if not chunks:
@@ -395,9 +395,9 @@ async def test_tts(req: TTSRequest):
             
             audio_data = np.concatenate(chunks)
             model_used = "kokoro-82m (FR)"
-            print(f"French TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
+            print(f"[TTS] French TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
         except Exception as e:
-            print(f"French TTS error: {e}")
+            print(f"[TTS] French TTS error: {e}")
             raise HTTPException(500, f"French TTS failed: {str(e)}")
 
     else:
@@ -405,11 +405,11 @@ async def test_tts(req: TTSRequest):
         if kokoro is None:
             raise HTTPException(503, "Kokoro EN not loaded")
         try:
-            print("Generating English TTS...")
+            print("[TTS] Generating English TTS...")
             generator = kokoro(req.text, voice="af_heart")
             chunks = []
             for i, (phonemes, duration, audio) in enumerate(generator):
-                print(f"Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
+                print(f"[TTS] Chunk {i}: audio shape={audio.shape if hasattr(audio, 'shape') else 'unknown'}")
                 chunks.append(audio)
             
             if not chunks:
@@ -417,9 +417,9 @@ async def test_tts(req: TTSRequest):
             
             audio_data = np.concatenate(chunks)
             model_used = "kokoro-82m (EN)"
-            print(f"English TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
+            print(f"[TTS] English TTS generated: shape={audio_data.shape}, chunks={len(chunks)}")
         except Exception as e:
-            print(f"English TTS error: {e}")
+            print(f"[TTS] English TTS error: {e}")
             raise HTTPException(500, f"English TTS failed: {str(e)}")
 
     # Validate audio data
@@ -485,7 +485,10 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     Internal voice pipeline with optional status callback.
     This is the actual implementation that can be called with a callback from WebSocket.
     """
-    print(f"[Voice Pipeline] ENTER _voice_full_pipeline_internal | session_id={session_id} | is_followup={is_followup}", flush=True)
+    session_short = session_id[:8] if session_id else "unknown"
+    print(f"══════════════════════════════════════════════════")
+    print(f"  PIPELINE START  │  Session: {session_short}")
+    print(f"══════════════════════════════════════════════════")
     from app.main import ml_models
     from app.layer1.ingestion import ingest_chat_request
     from app.layer2.orchestrator import smart_pm_routing
@@ -518,13 +521,9 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
 
     # Helper function to send status updates
     async def send_status(stage: str, language: str = "en"):
-        print(f"[Voice Pipeline] Status update: stage={stage}, language={language}")
         if status_callback:
             message = get_status_message(stage, language)
-            print(f"[Voice Pipeline] Calling callback with message: {message}")
             await status_callback(stage, message, language)
-        else:
-            print(f"[Voice Pipeline] No callback provided")
 
     # Helper function to generate TTS for status messages
     async def generate_status_tts(message: str, language: str) -> Optional[bytes]:
@@ -562,7 +561,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 wav_buffer.seek(0)
                 return wav_buffer.read()
         except Exception as e:
-            print(f"Error generating status TTS: {e}")
+            print(f"[TTS] Error generating status TTS: {e}")
             return None
 
     # Step 1: Load and transcribe audio using Layer 1 STT
@@ -587,26 +586,24 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             # Write audio bytes to temporary file
             buffer = io.BytesIO(audio_bytes)
             audio_array, sample_rate = sf.read(buffer)
+            # Resample to 16000 Hz if needed (standard for Riva)
+            if sample_rate != 16000:
+                import librosa
+                audio_array = librosa.resample(audio_array, orig_sr=sample_rate, target_sr=16000)
+                sample_rate = 16000
             sf.write(temp_filename, audio_array, sample_rate, format="WAV")
-            
-            print(f"Audio file written: {temp_filename}, sample_rate: {sample_rate}")
-            print(f"Sending request to NVIDIA Riva gRPC API")
             
             # Clone Riva Python clients if not already present
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             riva_clients_dir = os.path.join(project_root, "python-clients")
             if not os.path.exists(riva_clients_dir):
-                print(f"Cloning NVIDIA Riva Python clients to {riva_clients_dir}")
                 subprocess.run(
                     ["git", "clone", "https://github.com/nvidia-riva/python-clients.git", riva_clients_dir],
                     check=True, capture_output=True
                 )
             
-            # Path to the transcribe script
+            # Path to transcribe script
             transcribe_script = os.path.join(riva_clients_dir, "scripts", "asr", "transcribe_file_offline.py")
-            
-            if not os.path.exists(transcribe_script):
-                raise HTTPException(500, f"Riva client script not found at {transcribe_script}")
             
             # Build command for NVIDIA Riva client
             cmd = [
@@ -616,11 +613,9 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 "--use-ssl",
                 "--metadata", "function-id", RIVA_FUNCTION_ID,
                 "--metadata", "authorization", f"Bearer {api_key}",
-                "--language-code", "multi",  # Auto language detection
+                "--language-code", "multi",
                 "--input-file", temp_filename
             ]
-            
-            print(f"Running command: {' '.join(cmd)}")
             
             # Set environment variables for subprocess
             env = os.environ.copy()
@@ -650,11 +645,10 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             ]
             
             if result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
-                print(f"Riva client error: stdout={result.stdout!r} stderr={result.stderr!r}")
+                print(f"[STT] Riva client error: stdout={result.stdout!r} stderr={result.stderr!r}")
 
                 degraded_failure = "degraded" in stderr_lower or "degraded" in stdout_lower or "invalidargument" in stderr_lower or "invalidargument" in stdout_lower
                 if degraded_failure and RIVA_FALLBACK_FUNCTION_ID and RIVA_FALLBACK_FUNCTION_ID != RIVA_FUNCTION_ID:
-                    print(f"Riva function degraded. Retrying with fallback function-id: {RIVA_FALLBACK_FUNCTION_ID}")
                     cmd[7] = RIVA_FALLBACK_FUNCTION_ID
                     try:
                         result = subprocess.run(
@@ -672,14 +666,12 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                         raise HTTPException(504, f"NVIDIA Riva STT command timed out after {RIVA_COMMAND_TIMEOUT} seconds") from timeout_exc
 
                 if result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
-                    print(f" STT Error detected from Riva response")
+                    print(f"[STT] STT Error detected from Riva response")
                     return {
                         "success": False,
                         "error": "STT service unavailable. Please try again.",
                         "stage": "whisper_stt"
                     }
-            
-            print(f"Riva client output: {result.stdout}")
             
             # Parse the JSON output from Riva client
             try:
@@ -697,40 +689,37 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                         transcription = alternatives['transcript']
                         language_codes = alternatives.get('languageCode', [])
                         detected_language = language_codes[0] if language_codes else "unknown"
-                        
-                        print(f"Parsed transcription: {transcription[:100]}...")
-                        print(f"Detected language: {detected_language}")
+                        print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
                     else:
                         transcription = output
                         detected_language = "unknown"
-                        print(f"JSON parsing failed, using raw output")
                 else:
                     if "Final transcript:" in output:
                         transcription = output.split("Final transcript:")[-1].strip()
                         detected_language = "unknown"
+                        print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
                     else:
                         transcription = output
                         detected_language = "unknown"
-                        print(f"JSON parsing failed, using raw output")
+                        print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
                 
             except json.JSONDecodeError as e:
                 output = result.stdout.strip()
                 if "Final transcript:" in output:
                     transcription = output.split("Final transcript:")[-1].strip()
                     detected_language = "unknown"
-                    print(f"JSON parsing failed ({e}), using final transcript line")
+                    print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
                 else:
                     transcription = output
                     detected_language = "unknown"
-                    print(f"JSON parsing failed ({e}), using raw output")
+                    print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
             
         finally:
-            # Clean up temp file
             try:
                 if os.path.exists(temp_filename):
                     os.unlink(temp_filename)
-            except Exception as cleanup_error:
-                print(f"Warning: Could not clean up temp file {temp_filename}: {cleanup_error}")
+            except Exception:
+                pass
 
         # Store STT results
         results["stages"]["whisper_stt"] = {
@@ -746,7 +735,6 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
 
     except Exception as e:
         error_str = str(e)
-        print(f"NVIDIA Riva API error: {error_str}")
         results["stages"]["whisper_stt"] = {
             "success": False,
             "error": error_str
@@ -782,7 +770,6 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     translation_applied = False
 
     if detected_language != "en" and detected_language != "unknown":
-        print(f"Detected non-English language: {detected_language}. Routing through Nemotron translation gate...")
         try:
             from app.layer2.shared.model_loader import get_nemotron_model
             nemotron = get_nemotron_model()
@@ -792,12 +779,11 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
 
             # Apply safety gate
             if safety_label == "unsafe":
-                print(f"🚫 Safety gate blocked: {safety_label}")
                 raise HTTPException(400, "Query blocked by safety filter")
 
             text_for_ingestion = english_text
             translation_applied = True
-            print(f"Nemotron translation applied: {transcription[:50]}... -> {english_text[:50]}...")
+            print(f"  [TRANSLATE]  → \"{english_text}\"  [{detected_language}→en]")
 
             results["stages"]["translator"] = {
                 "success": True,
@@ -810,7 +796,6 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             }
 
         except Exception as e:
-            print(f"Nemotron translation failed: {e}. Using original transcription.")
             text_for_ingestion = transcription
             results["stages"]["translator"] = {
                 "success": False,
@@ -823,25 +808,20 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             try:
                 from deep_translator import GoogleTranslator
                 text_for_kb = GoogleTranslator(source="en", target="fr").translate(transcription)
-                print(f"English translated to French for KB: {transcription[:50]}... -> {text_for_kb[:50]}...")
             except Exception as e:
-                print(f"English to French translation failed: {e}. Using original English.")
                 text_for_kb = transcription
         # For Arabic, translate to French for KB search
         elif detected_language == "ar":
             try:
                 from deep_translator import GoogleTranslator
                 text_for_kb = GoogleTranslator(source="ar", target="fr").translate(transcription)
-                print(f"Arabic translated to French for KB: {transcription[:50]}... -> {text_for_kb[:50]}...")
             except Exception as e:
-                print(f"Arabic to French translation failed: {e}. Using original Arabic.")
                 text_for_kb = transcription
         # For French, keep as-is for KB search
         elif detected_language == "fr":
             text_for_kb = transcription
-            print(f"French kept as-is for KB search.")
-
-        print(f"Detected English language. Direct flow to orchestrator.")
+        
+        print(f"  [TRANSLATE]  → (no translation needed)")
         results["stages"]["translator"] = {
             "success": True,
             "translation_applied": False,
@@ -858,12 +838,14 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         security_check = scan_input(text_for_ingestion)
         
         if not security_check["is_safe"]:
-            logger.warning(f"[Security-L1] Blocked: {security_check['reason']}")
+            print(f"  [SECURITY]   → ✗ Blocked: {security_check['reason']}")
             return {
                 "success": False,
                 "blocked": True,
                 "message": security_check["reason"]
             }
+        
+        print(f"  [SECURITY]   → ✓ Passed")
         
         results["stages"]["security_layer1"] = {
             "success": True,
@@ -871,7 +853,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             "risk_score": security_check["risk_score"]
         }
     except Exception as e:
-        logger.error(f"[Security-L1] ERROR: {str(e)}")
+        print(f"  [SECURITY]   → ✗ Error: {str(e)}")
         results["stages"]["security_layer1"] = {
             "success": False,
             "error": str(e)
@@ -892,14 +874,10 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         from app.layer2.shared.session_manager import get_orchestrator_context
         saved_context = get_orchestrator_context(session_id)
         if saved_context:
-            print(f"[Voice Pipeline] Restoring orchestrator_context from session: {saved_context}")
             state.orchestrator_context.update(saved_context)
         
         # STEP 1: Check if we're in a special state using new conversation context
         conv_context = get_conversation_context(session_id)
-        
-        # DEBUG: Print conversation context state
-        print(f"[Voice Pipeline] Conversation context check: session_id={session_id}, waiting_for_input_type={conv_context.waiting_for_input_type if conv_context else 'None'}")
         
         # CHECK: Are we waiting for eligibility yes/no answer? (New architecture)
         # Use both new conversation context AND old flag for compatibility
@@ -945,7 +923,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
 
             if is_exact_match(user_response_normalized, yes_patterns):
                 # USER SAID YES - REDIRECT IMMEDIATELY
-                print(f"✅ ELIGIBILITY: User said YES - Redirecting to eligibility URL")
+                print(f"[VOICE] ELIGIBILITY: User said YES - Redirecting to eligibility URL")
                 clear_eligibility_flag(session_id)
                 
                 # Record this turn in conversation context
@@ -963,7 +941,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 )
                 add_turn_record(session_id, turn)
                 
-                redirect_response_en = "Great! You can test your loan eligibility here: https://bna-loan-eligibility-test.com\n\nPlease fill out the quick assessment form. It will take about 2-3 minutes, and you'll get an instant eligibility result."
+                redirect_response_en = "Great! You can test your loan eligibility here.\n\nPlease fill out the quick assessment form. It will take about 2-3 minutes, and you'll get an instant eligibility result."
                 
                 # Translate to user's language
                 from app.layer3.translation.translator import translate_from_english
@@ -997,13 +975,18 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                     "conversation_id": str(state.conversation_id),
                     "session_id": session_id,
                     "eligibility_redirect": "yes",
-                    "redirect_url": "https://bna-loan-eligibility-test.com"
+                    "redirect_url": "/static/eligibility_redirect.html"
                 }
+                
+                # Add flags for WebSocket to end call and redirect
+                results["end_call"] = True
+                results["redirect_url"] = "/static/eligibility_redirect.html"
+                
                 return results
                 
             elif is_exact_match(user_response_normalized, no_patterns):
                 # USER SAID NO - STATIC RESPONSE
-                print(f"❌ ELIGIBILITY: User said NO - Sending static response")
+                print(f"[VOICE] ELIGIBILITY: User said NO - Sending static response")
                 clear_eligibility_flag(session_id)
 
                 # Mark that user declined eligibility test, don't ask again in this session
@@ -1093,9 +1076,13 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         # STEP 2: Pass conversation history to orchestrator for context
         if conv_context:
             state.conversation_history = conv_context.get_previous_turns(n=3)
-            print(f"[Voice Pipeline] Passing {len(state.conversation_history)} previous turns to orchestrator")
         
         result_state = smart_pm_routing(state)
+        
+        selected_agent = result_state.required_agents[0] if result_state.required_agents else "unknown"
+        confidence = result_state.orchestrator_context.get("confidence", 0.0)
+        print(f"  [ROUTING]    → {selected_agent}  (score: {confidence:.2f})")
+        print(f"               ↳ Intent: {result_state.intent}")
 
         results["stages"]["orchestrator"] = {
             "success": True,
@@ -1116,20 +1103,26 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     is_loan_intent = result_state.intent in loan_intents if hasattr(result_state, 'intent') else False
     
     await send_status("searching_kb", detected_language)
+    print(f"  [KB SEARCH]  → Searching...")
     try:
         from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
         kb_system = IntelligentRAGSystem()
         import asyncio
 
+        print(f"  [KB SEARCH]  → Loading documents...")
         if asyncio.iscoroutinefunction(kb_system.load_documents):
             await kb_system.load_documents()
         else:
             kb_system.load_documents()
+        print(f"  [KB SEARCH]  → Documents loaded, asking question...")
 
         if asyncio.iscoroutinefunction(kb_system.ask_question):
             kb_result = await kb_system.ask_question(text_for_kb)
         else:
             kb_result = kb_system.ask_question(text_for_kb)
+        
+        print(f"  [KB SEARCH]  → ✓ Done")
+        print(f"  [KB SEARCH]  → Answer: {kb_result.get('answer', 'No answer')[:100]}...")
 
         results["stages"]["knowledge_base"] = {
             "success": True,
@@ -1244,7 +1237,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 english_response = validated_response
                 final_state.final_response_en = english_response
             except Exception as e:
-                logger.error(f"[Security-L2] ERROR: {str(e)}")
+                print(f"  [SECURITY]   → ✗ Output validation error")
                 results["stages"]["security_layer2"] = {
                     "success": False,
                     "error": str(e)
@@ -1253,7 +1246,6 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             # Step 2: Translate back to user's original language
             from app.layer3.translation.translator import translate_from_english
             localized_response = translate_from_english(english_response, detected_language)
-            logger.debug(f"[Layer3] Localized response: {localized_response}")
             
             # Step 3: Convert to speech
             from app.layer3.delivery import deliver_response
@@ -1272,8 +1264,9 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             
             audio_state = deliver_response(delivery_state)
             
-            # Step 4: Add audio to pipeline response
             if audio_state.final_response_audio:
+                print(f"  [TTS]        → {detected_language} ({audio_state.audio_model_used}) | Audio ready")
+                
                 # Encode binary audio data as base64 for JSON serialization
                 import base64
                 audio_base64 = base64.b64encode(audio_state.final_response_audio).decode('utf-8')
@@ -1282,9 +1275,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 results["audio_model_used"] = audio_state.audio_model_used
                 results["audio_sample_rate"] = audio_state.audio_sample_rate
                 results["final_response_localized"] = audio_state.final_response_localized
-                logger.debug(f"[Layer3] Audio generated: {len(audio_state.final_response_audio)} bytes")
-                
-                # Step 4.5: Add to conversation history
+        
                 add_to_history(session_id, text_for_ingestion, localized_response or english_response)
         
     except Exception as e:
@@ -1293,6 +1284,14 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             "error": str(e)
         }
         raise HTTPException(500, f"Orchestrator processing failed: {str(e)}")
+
+    # Add completion footer
+    from app.layer2.shared.session_manager import get_session
+    session = get_session(session_id)
+    turn_number = len(session.get("history", [])) if session else 1
+    print(f"──────────────────────────────────────────────────")
+    print(f"  ✓ Turn {turn_number} complete  │  Session: {session_short}")
+    print(f"══════════════════════════════════════════════════")
 
     # Step 5: Knowledge Base Query
     try:

@@ -15,7 +15,7 @@ from intelligent_rag_system import IntelligentRAGSystem
 def main():
     """Interactive terminal interface"""
     print("=" * 60)
-    print("🇫🇷 TERMINAL - BASE DE CONNAISSANCE BANCAIRE")
+    print("[TERMINAL] TERMINAL - BASE DE CONNAISSANCE BANCAIRE")
     print("=" * 60)
     print("Posez vos questions en français sur les sujets bancaires:")
     print("- Prêts et crédits")
@@ -33,24 +33,24 @@ def main():
         # Load documents asynchronously
         asyncio.run(kb.load_documents())
         
-        print(f"✅ {len(kb.documents)} documents chargés")
-        print(f"✅ {len(kb.document_chunks)} chunks traités")
-        print(f"✅ {len(kb.document_profiles)} profils générés")
+        print(f"[TERMINAL] {len(kb.documents)} documents chargés")
+        print(f"[TERMINAL] {len(kb.document_chunks)} chunks traités")
+        print(f"[TERMINAL] {len(kb.document_profiles)} profils générés")
         print()
         
         while True:
             try:
                 # Get user input
-                question = input("❓ Votre question: ").strip()
+                question = input("[TERMINAL] Votre question: ").strip()
                 
                 if question.lower() in ['quitter', 'exit', 'q', 'sortir']:
-                    print("👋 Au revoir!")
+                    print("[TERMINAL] Au revoir!")
                     break
                 
                 if not question:
                     continue
                 
-                print(f"\n🔍 Recherche: {question}")
+                print(f"\n[TERMINAL] Recherche: {question}")
                 print("-" * 40)
                 
                 # Process question (async)
@@ -61,35 +61,35 @@ def main():
                     print(f"� Clarification: {result['answer']}")
                 else:
                     print(f"�💡 Réponse: {result['answer']}")
-                    print(f"📄 Sources:")
+                    print(f"[TERMINAL] Sources:")
                     for i, source in enumerate(result['sources'], 1):
                         print(f"   {i}. {source}")
-                    print(f"🎯 Confiance: {result['confidence']:.0%}")
-                    print(f"📚 Documents trouvés: {result['documents_found']}")
+                    print(f"[TERMINAL] Confiance: {result['confidence']:.0%}")
+                    print(f"[TERMINAL] Documents trouves: {result['documents_found']}")
                 
                 # Display confidence
                 confidence = result['confidence']
                 if confidence > 0.7:
-                    confidence_icon = "🟢"
+                    confidence_icon = "HIGH"
                 elif confidence > 0.4:
-                    confidence_icon = "🟡"
+                    confidence_icon = "MEDIUM"
                 else:
-                    confidence_icon = "🔴"
+                    confidence_icon = "LOW"
                 
-                print(f"\n🎯 Confiance: {confidence:.2f} {confidence_icon}")
-                print(f"📚 Documents trouvés: {result['documents_found']}")
+                print(f"\n[TERMINAL] Confiance: {confidence:.2f} {confidence_icon}")
+                print(f"[TERMINAL] Documents trouves: {result['documents_found']}")
                 print("=" * 60)
                 
             except KeyboardInterrupt:
-                print("\n👋 Au revoir!")
+                print("\n[TERMINAL] Au revoir!")
                 break
             except Exception as e:
-                print(f"❌ Erreur: {e}")
+                print(f"[TERMINAL] ERROR: Erreur: {e}")
                 print("Veuillez réessayer.")
                 print()
                 
     except Exception as e:
-        print(f"❌ Erreur d'initialisation: {e}")
+        print(f"[TERMINAL] ERROR: Erreur d'initialisation: {e}")
         print("Vérifiez que le dossier 'policies' existe et contient des fichiers PDF.")
 
 if __name__ == "__main__":

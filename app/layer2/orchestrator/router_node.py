@@ -27,7 +27,6 @@ def router_node(state: ConversationState) -> ConversationState:
             past_messages = [turn["user"] for turn in last_turns]
             # Simple concatenation — no LLM, no hallucination
             reconstructed_query = " ".join(past_messages) + " " + current_input
-            print(f"[Orchestrator] Reconstructed query: {reconstructed_query}")
 
     # Store in state for KB and client_support to use
     state.reconstructed_query = reconstructed_query
@@ -40,12 +39,9 @@ def router_node(state: ConversationState) -> ConversationState:
     # If model returns unknown intent, default to client_support
     if intent == "unknown" or category == "unknown":
         target_agent = "client_support"
-        print(f"🔍 Router: Unknown intent '{intent}', defaulting to client_support")
     else:
         # Resolve to best matching agent using semantic similarity
         target_agent = registry.resolve(intent)
-    
-    print(f"🔍 Router: Intent='{intent}', Category='{category}', Target Agent='{target_agent}'")
     
     # Update state with routing decision
     state.intent = intent

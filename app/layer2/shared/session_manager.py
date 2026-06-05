@@ -24,7 +24,8 @@ def create_session() -> str:
         "eligibility_language": "en",  # Language for eligibility response
         "conversation_context": ConversationContext(session_id=session_id),
     }
-    print(f"🟢 SESSION START: {session_id}")
+    session_short = session_id[:8] if session_id else "unknown"
+    print(f"[SESSION] → Start: {session_short}")
     logger.debug(f"[Session] Created: {session_id}")
     return session_id
 
@@ -51,13 +52,13 @@ def add_to_history(session_id: str, user_message: str, avatar_response: str):
     # Keep only last 5 turns to avoid token overflow
     if len(session["history"]) > 5:
         session["history"] = session["history"][-5:]
-    print(f"💬 SESSION HISTORY: User='{user_message[:50]}...' | Avatar='{avatar_response[:50]}...' | Session={session_id}")
     logger.debug(f"[Session] History updated for: {session_id}")
 
 def end_session(session_id: str):
     if session_id in sessions:
+        session_short = session_id[:8] if session_id else "unknown"
         del sessions[session_id]
-        print(f"🔴 SESSION END: {session_id}")
+        print(f"[SESSION] → End: {session_short}")
         logger.debug(f"[Session] Ended: {session_id}")
 
 def update_audio_state(session_id: str, new_state: str):
@@ -79,16 +80,12 @@ def save_orchestrator_context(session_id: str, orchestrator_context: dict):
     if session:
         session["orchestrator_context"] = orchestrator_context
         session["last_active"] = time.time()
-        logger.debug(f"[Session] Orchestrator context saved for {session_id}")
-        print(f"💾 SESSION CONTEXT: Saved eligibility_test_asked={orchestrator_context.get('eligibility_test_asked', False)} for {session_id}")
 
 def get_orchestrator_context(session_id: str) -> dict:
     """Retrieve stored orchestrator context for this session."""
     session = sessions.get(session_id)
     if session:
         context = session.get("orchestrator_context", {})
-        logger.debug(f"[Session] Orchestrator context retrieved for {session_id}")
-        print(f"📖 SESSION CONTEXT: Retrieved eligibility_test_asked={context.get('eligibility_test_asked', False)} for {session_id}")
         return context
     return {}
 
@@ -99,8 +96,6 @@ def set_waiting_for_eligibility_answer(session_id: str, language: str = "en"):
         session["waiting_for_eligibility"] = True
         session["eligibility_language"] = language  # Store user language for static response
         session["last_active"] = time.time()
-        print(f"⏳ ELIGIBILITY: Waiting for yes/no answer in {language} for {session_id}")
-        logger.debug(f"[Session] Waiting for eligibility answer for {session_id}")
 
 def is_waiting_for_eligibility_answer(session_id: str) -> bool:
     """Check if session is waiting for eligibility yes/no answer."""
@@ -118,8 +113,6 @@ def clear_eligibility_flag(session_id: str):
     if session:
         session["waiting_for_eligibility"] = False
         session["last_active"] = time.time()
-        print(f"✅ ELIGIBILITY: Flag cleared for {session_id}")
-        logger.debug(f"[Session] Eligibility flag cleared for {session_id}")
 
 def get_history_as_text(session_id: str) -> str:
     session = get_session(session_id)
@@ -172,7 +165,6 @@ def add_turn_record(session_id: str, turn: TurnRecord):
         ctx.add_turn(turn)
         session["conversation_context"] = ctx
         session["last_active"] = time.time()
-        print(f"📝 TURN {turn.turn_number}: User='{turn.user_input[:40]}' Agent={turn.agent_routed_to}")
 
 def set_agent_waiting_state(session_id: str, agent_name: str, input_type: str, context_data: Dict = None):
     """Set what agent is expecting next"""
@@ -185,7 +177,6 @@ def set_agent_waiting_state(session_id: str, agent_name: str, input_type: str, c
         if context_data:
             ctx.agent_context.update(context_data)
         session["conversation_context"] = ctx
-        print(f"⏳ WAITING: {agent_name} expects {input_type}")
 
 def set_eligibility_declined(session_id: str, declined: bool = True):
     """Mark that user declined eligibility test, don't ask again"""
@@ -194,7 +185,6 @@ def set_eligibility_declined(session_id: str, declined: bool = True):
         ctx = session.get("conversation_context", ConversationContext(session_id=session_id))
         ctx.eligibility_declined = declined
         session["conversation_context"] = ctx
-        print(f"🚫 ELIGIBILITY: Declined flag set to {declined} for {session_id}")
 
 def is_eligibility_declined(session_id: str) -> bool:
     """Check if user already declined eligibility test"""

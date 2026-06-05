@@ -41,7 +41,6 @@ def knowledge_base_node(state: ConversationState) -> ConversationState:
             rag = loop.run_until_complete(get_rag_system())
             # Use reconstructed_query if available, fallback to normalized_text_en
             query = getattr(state, "reconstructed_query", None) or state.normalized_text_en or state.original_text or ""
-            print(f"KB searching: {query}")
             result = loop.run_until_complete(rag.ask_question(query))
             return result
         finally:
@@ -126,28 +125,22 @@ def _run_with_langgraph(state: ConversationState) -> ConversationState:
     def choose_after_start(current: ConversationState) -> str:
         # Check if we're waiting for eligibility test answer
         eligibility_test_asked = current.orchestrator_context.get("eligibility_test_asked", False)
-        print(f"🔍 Graph Routing DEBUG: eligibility_test_asked={eligibility_test_asked}, intent={current.intent}")
         
         if eligibility_test_asked:
-            print("🔍 Graph Routing: Waiting for eligibility test answer, routing to loan_agent")
             return "loan_agent"
         
         # Check if loan eligibility test
         loan_intents = ["check_loan_eligibility", "apply_for_loan", "loan_status", "apply_for_mortgage", "check_mortgage_payments"]
-        print(f"🔍 Graph Routing DEBUG: intent '{current.intent}' in loan_intents {loan_intents}: {current.intent in loan_intents}")
         
         if current.intent in loan_intents:
             # Route loan intents directly to loan agent, skip knowledge_base
-            print("🔍 Graph Routing: Loan intent detected, routing directly to loan_agent (skipping KB)")
             return "loan_agent"
         else:
             # Non-loan queries go through knowledge_base first
-            print("🔍 Graph Routing: Using pre-computed intent, routing to knowledge_base")
             return "knowledge_base"
 
     # Route from knowledge_base to client_support (no loan here anymore, they go directly to loan_agent)
     def choose_after_knowledge_base(current: ConversationState) -> str:
-        print("🔍 Graph Routing: Knowledge base complete, routing to client_support")
         return "client_support"
 
     # Route from loan to client_support only if needed
@@ -157,16 +150,13 @@ def _run_with_langgraph(state: ConversationState) -> ConversationState:
         
         if eligibility_answer is not None:
             # Eligibility test has been answered, skip client_support and end layer2
-            print("🔍 Graph Routing: Loan eligibility test answered, ending layer2 pipeline")
             return END
         else:
             # Eligibility test still pending, go to client_support for synthesis
-            print("🔍 Graph Routing: Loan eligibility test pending, routing to client_support")
             return "client_support"
 
     # Loan agent node
     def loan_agent_node(state: ConversationState) -> ConversationState:
-        print("🔍 Loan Agent: Processing loan eligibility test")
         state = run_loan_agent(state)
         return state
 

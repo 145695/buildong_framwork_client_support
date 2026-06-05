@@ -107,7 +107,6 @@ class IntelligentRAGSystem:
                 return MistralLLM(model_name="mistral-small", temperature=0)
             except ValueError as e:
                 if "MISTRAL_API_KEY not found" in str(e):
-                    print("⚠️  Mistral API key not found. Using fallback LLM.")
                     return self._create_fallback_llm()
                 raise
         except ImportError:
@@ -203,13 +202,10 @@ class IntelligentRAGSystem:
                 if len(full_text.strip()) > 50:
                     output_path = self.text_dir / (pdf_path.stem + ".txt")
                     output_path.write_text(full_text, encoding="utf-8")
-                    print(f"✅ Converted: {pdf_path.name} -> {output_path.name} ({len(full_text)} chars)")
                     return True
                 else:
-                    print(f"⚠️  Skipped: {pdf_path.name} -> too short")
                     return False
         except Exception as e:
-            print(f"❌ Error converting {pdf_path.name}: {e}")
             return False
 
     def _convert_new_pdfs(self, changed_files: List[str]) -> List[str]:
@@ -231,7 +227,6 @@ class IntelligentRAGSystem:
         # First, convert any new PDFs to text
         new_txt_files = self._convert_new_pdfs(changed_files)
         if new_txt_files:
-            print(f"📄 Converted {len(new_txt_files)} new PDFs to text")
             # Refresh metadata after conversion
             current_metadata = self._get_all_files_metadata()
 
@@ -256,14 +251,12 @@ class IntelligentRAGSystem:
                 # Remove chunks for deleted file
                 original_name = txt_path.stem + ".pdf"
                 self.document_chunks = [c for c in self.document_chunks if c["filename"] != original_name]
-                print(f"🗑️  Removed chunks for: {filename}")
             else:
                 # Process new or modified file
                 try:
                     content = txt_path.read_text(encoding="utf-8").strip()
 
                     if len(content) < 50:
-                        print(f"⚠️  {filename}: too short, skipped")
                         continue
 
                     # Remove old chunks for this file (if it was modified)
@@ -301,23 +294,18 @@ class IntelligentRAGSystem:
                             except Exception:
                                 pass
 
-                        print(f"✅ Processed: {filename} ({len(useful_chunks)} chunks)")
-                    else:
-                        print(f"⚠️  {filename}: no useful chunks found")
-
                 except Exception as e:
-                    print(f"❌ Error processing {filename}: {e}")
+                    pass
 
         # Rebuild vector index since chunks changed
         if EMBEDDINGS_AVAILABLE:
             try:
                 self._build_vector_index()
             except Exception as e:
-                print(f"⚠️ Failed to rebuild vector index: {e}")
+                pass
 
         # Save updated cache
         self._save_index(cache_dir)
-        print(f"✅ Incremental update complete ({len(self.document_chunks)} total chunks)")
 
     def _save_index(self, cache_dir: Path):
         """Save FAISS index and chunks to disk"""
@@ -338,7 +326,6 @@ class IntelligentRAGSystem:
                 "hash": self._get_files_hash(),
                 "file_metadata": self._get_all_files_metadata()
             }, f)
-        print(f"✅ Index cached to disk ({len(self.document_chunks)} chunks)")
 
     def _load_index(self, cache_dir: Path) -> bool:
         """Load FAISS index and chunks from disk"""
@@ -359,13 +346,10 @@ class IntelligentRAGSystem:
                     # New format: compare individual file metadata
                     changed_files = self._detect_changed_files(cached_metadata, current_metadata)
                     if changed_files:
-                        print(f"📂 Files changed: {changed_files}. Rebuilding index...")
                         return False
-                    print(f"✅ No file changes detected, loading from cache")
                 else:
                     # Old format: use global hash
                     if data["hash"] != self._get_files_hash():
-                        print("📂 Files changed, rebuilding index...")
                         return False
 
                 self.document_chunks = data["chunks"]
@@ -407,7 +391,6 @@ class IntelligentRAGSystem:
                     self.faiss_index = faiss.read_index(str(index_path))
                     self.indexed_chunks = self.document_chunks
                     self._vector_backend = "faiss"
-                    print(f"✅ Index loaded from cache ({len(self.document_chunks)} chunks) - startup instant")
                 else:
                     self.faiss_index = None
                     # Load embeddings for brute-force cosine similarity if available
@@ -422,17 +405,13 @@ class IntelligentRAGSystem:
                         self.embeddings_matrix = None
                         self._vector_backend = "none"
 
-                    print(f"✅ Cache loaded ({len(self.document_chunks)} chunks) - vector backend: {self._vector_backend}")
                 return True
         except Exception as e:
-            print(f"⚠️ Cache load failed: {e}, rebuilding...")
             return False
     
     async def load_documents(self):
         """Load and intelligently process documents from text files with incremental updates"""
         if not self.text_dir.exists():
-            print(f"❌ Text directory not found: {self.text_dir}")
-            print("Run convert_pdfs_to_text.py first")
             return
 
         cache_dir = Path(__file__).resolve().parent / "vector_cache"
@@ -452,7 +431,6 @@ class IntelligentRAGSystem:
 
                         if not changed_files:
                             # No changes, load from cache
-                            print(f"✅ No file changes detected, loading from cache")
                             if self._load_index(cache_dir):
                                 if EMBEDDINGS_AVAILABLE and self._vector_backend == "none" and self.document_chunks:
                                     try:
@@ -462,7 +440,6 @@ class IntelligentRAGSystem:
                                 return
                         else:
                             # Incremental update: only process changed files
-                            print(f"📂 Incremental update: {len(changed_files)} files changed")
                             await self._incremental_update(cached_metadata, current_metadata, changed_files)
                             return
                     else:
@@ -475,12 +452,10 @@ class IntelligentRAGSystem:
                                     pass
                             return
             except Exception as e:
-                print(f"⚠️ Cache load failed: {e}, rebuilding...")
+                pass
 
         # Full rebuild if cache doesn't exist or load failed
         txt_files = list(self.text_dir.glob("*.txt"))
-        print(f"Found {len(txt_files)} text files in {self.text_dir}")
-        print(f"Files: {[f.name for f in txt_files]}")
 
         # Clear any old chunks
         self.document_chunks = []
@@ -493,7 +468,6 @@ class IntelligentRAGSystem:
                 content = txt_path.read_text(encoding="utf-8").strip()
                 
                 if len(content) < 50:
-                    print(f"⚠️  {txt_path.name}: too short, skipped")
                     continue
                 
                 chunks = self._create_chunks(content)
@@ -533,10 +507,9 @@ class IntelligentRAGSystem:
                         "content": content,
                         "profile": profile
                     })
-                    print(f"✅ {txt_path.name}: {len(useful_chunks)} chunks")
                 else:
-                    print(f"⚠️  {txt_path.name}: no useful chunks")
-                    
+                    pass
+
             except Exception as e:
                 logger.error(f"Error loading {txt_path.name}: {e}")
         
@@ -549,14 +522,10 @@ class IntelligentRAGSystem:
     def _build_vector_index(self):
         """Build a semantic retrieval index (FAISS if available, else brute-force cosine)"""
         if not EMBEDDINGS_AVAILABLE or self.embedder is None:
-            print("❌ Embeddings not available")
             return
         
         if not self.document_chunks:
-            print("❌ No chunks to index")
             return
-        
-        print(f"Building semantic index for {len(self.document_chunks)} chunks...")
         texts = [chunk["content"] for chunk in self.document_chunks]
         
         # Generate embeddings
@@ -573,11 +542,9 @@ class IntelligentRAGSystem:
             self.faiss_index = faiss.IndexFlatIP(dim)
             self.faiss_index.add(embeddings)
             self._vector_backend = "faiss"
-            print(f"✅ FAISS index ready: {len(texts)} chunks indexed")
         else:
             self.faiss_index = None
             self._vector_backend = "bruteforce"
-            print(f"✅ Embedding matrix ready (no FAISS): {len(texts)} chunks indexed")
         
         # Save to cache
         cache_dir = Path(__file__).parent / "vector_cache"
@@ -701,7 +668,7 @@ Answer only: YES (keep) or NO (discard)"""
             
             # Debug logging for skipped chunks (reduced)
             if not result and len(chunk_text) > 100:
-                print(f"SKIPPED CHUNK: {len(chunk_text)} chars | {chunk_text[:80]}...")
+                pass
             
             return result
         except Exception as e:
@@ -1292,22 +1259,20 @@ Réponse:"""
 # Test function
 async def test_intelligent_system():
     """Test the intelligent RAG system"""
-    print("🧪 Testing Intelligent RAG System...")
-    
     try:
         system = IntelligentRAGSystem()
         
         # Load documents asynchronously
         await system.load_documents()
         
-        print(f"✅ Loaded {len(system.documents)} documents")
-        print(f"✅ Processed {len(system.document_chunks)} chunks")
-        print(f"✅ Generated {len(system.document_profiles)} profiles")
+        print(f"[RAG] Loaded {len(system.documents)} documents")
+        print(f"[RAG] Processed {len(system.document_chunks)} chunks")
+        print(f"[RAG] Generated {len(system.document_profiles)} profiles")
         
         # Test with the problematic query
         test_question = "c'est l'Éligibilité d'un crédit immobilier?"
         
-        print(f"\n❓ Question: {test_question}")
+        print(f"\n[RAG] Question: {test_question}")
         print("-" * 60)
         
         result = await system.ask_question(test_question)

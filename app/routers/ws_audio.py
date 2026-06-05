@@ -98,8 +98,6 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                         try:
                             from app.main import ml_models
 
-                            print(f"[Status TTS] Generating audio for stage: {stage}, message: {message}, language: {language}")
-
                             # Select TTS model based on language
                             tts_audio_data = None
                             sample_rate = 24000
@@ -108,7 +106,6 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                 # Use gTTS for Arabic (F5TTS requires reference file which we don't have)
                                 try:
                                     from gtts import gTTS
-                                    print(f"[Status TTS] Using gTTS for Arabic")
                                     tts = gTTS(text=message, lang='ar')
                                     wav_buffer = io.BytesIO()
                                     tts.write_to_fp(wav_buffer)
@@ -119,13 +116,11 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                     if len(tts_audio_data.shape) > 1:
                                         tts_audio_data = tts_audio_data[:, 0]
                                 except Exception as e:
-                                    print(f"[Status TTS] gTTS failed for Arabic: {e}")
                                     tts_audio_data = None
                             elif language == "fr":
                                 # For French, use gTTS as fallback since Kokoro FR may not have good French voices
                                 try:
                                     from gtts import gTTS
-                                    print(f"[Status TTS] Using gTTS for French")
                                     tts = gTTS(text=message, lang='fr')
                                     wav_buffer = io.BytesIO()
                                     tts.write_to_fp(wav_buffer)
@@ -136,11 +131,9 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                     if len(tts_audio_data.shape) > 1:
                                         tts_audio_data = tts_audio_data[:, 0]
                                 except Exception as e:
-                                    print(f"[Status TTS] gTTS failed for French: {e}")
                                     # Fallback to Kokoro EN
                                     kokoro_en = ml_models.get("tts_kokoro_en")
                                     if kokoro_en:
-                                        print(f"[Status TTS] Falling back to Kokoro EN for French")
                                         generator = kokoro_en(message, voice="af_heart")
                                         chunks = []
                                         for i, (phonemes, duration, audio) in enumerate(generator):
@@ -152,24 +145,19 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                 # Use Kokoro EN for English and others
                                 kokoro_en = ml_models.get("tts_kokoro_en")
                                 if kokoro_en:
-                                    print(f"[Status TTS] Using Kokoro EN for {language}")
                                     generator = kokoro_en(message, voice="af_heart")
                                     chunks = []
                                     for i, (phonemes, duration, audio) in enumerate(generator):
                                         chunks.append(audio)
                                     if chunks:
                                         tts_audio_data = np.concatenate(chunks)
-                                else:
-                                    print(f"[Status TTS] Kokoro EN not found")
 
                             if tts_audio_data is not None:
-                                print(f"[Status TTS] Audio generated, shape: {tts_audio_data.shape}")
                                 # Convert to WAV bytes
                                 wav_buffer = io.BytesIO()
                                 sf.write(wav_buffer, tts_audio_data, sample_rate, format="WAV")
                                 wav_buffer.seek(0)
                                 audio_bytes = wav_buffer.read()
-                                print(f"[Status TTS] WAV bytes: {len(audio_bytes)} bytes")
                                 # Send audio as base64
                                 audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
                                 await websocket.send_json({
@@ -178,11 +166,7 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                                     "audio": f"data:audio/wav;base64,{audio_base64}",
                                     "language": language
                                 })
-                                print(f"[Status TTS] Audio sent for stage: {stage}")
-                            else:
-                                print(f"[Status TTS] No audio generated")
                         except Exception as e:
-                            print(f"[Status TTS] Error generating status TTS: {e}")
                             import traceback
                             traceback.print_exc()
 
@@ -207,11 +191,14 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                         is_followup=is_followup,
                     )
 
+                    print(f"[WebSocket] Pipeline result received, end_call={pipeline_result.get('end_call')}, redirect_url={pipeline_result.get('redirect_url')}")
+
                     # Send the complete pipeline results back to client
                     await websocket.send_json({
                         "type": "pipeline_result",
                         "data": pipeline_result
                     })
+                    print(f"[WebSocket] pipeline_result message sent")
 
                     processor.reset()
                     session_manager.update_audio_state(session_id, "RECORDING")

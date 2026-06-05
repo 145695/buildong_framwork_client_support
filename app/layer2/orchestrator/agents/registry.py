@@ -30,15 +30,15 @@ class AgentRegistry:
         try:
             # Use multilingual model for better semantic understanding
             self.embedder = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
-            print(f"✅ Agent registry loaded sentence transformer: paraphrase-multilingual-MiniLM-L12-v2")
+            print(f"[REGISTRY] Loaded sentence transformer: paraphrase-multilingual-MiniLM-L12-v2")
         except Exception as e:
-            print(f"⚠️  Failed to load sentence transformer: {e}")
+            print(f"[REGISTRY] WARNING: Failed to load sentence transformer: {e}")
             # Fallback to simple model
             self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
     
     def register(self, agent_id: str, description: str):
         """Register an agent with pre-computed embedding"""
-        print(f"📝 Registering agent: {agent_id}")
+        print(f"[REGISTRY] Registering agent: {agent_id}")
         
         # Pre-compute embedding for the description
         embedding = self.embedder.encode(description, convert_to_tensor=True)
@@ -50,16 +50,16 @@ class AgentRegistry:
             embedding=embedding
         )
         
-        print(f"✅ Registered agent {agent_id} with embedding shape: {embedding.shape}")
+        print(f"[REGISTRY] Registered agent {agent_id} with embedding shape: {embedding.shape}")
     
     def resolve(self, intent_label: str) -> str:
         """Resolve intent to best matching agent using semantic similarity"""
         if not self.agents:
-            print("⚠️  No agents registered, falling back to client_support")
+            print("[REGISTRY] WARNING: No agents registered, falling back to client_support")
             return "client_support"
         
         if not self.embedder:
-            print("⚠️  No embedder available, falling back to client_support")
+            print("[REGISTRY] WARNING: No embedder available, falling back to client_support")
             return "client_support"
         
         # Embed the intent label
@@ -76,13 +76,13 @@ class AgentRegistry:
                 np.linalg.norm(intent_embedding) * np.linalg.norm(agent_info.embedding)
             )
             
-            print(f"🔍 Similarity score for {agent_id}: {similarity:.4f}")
+            print(f"[REGISTRY] Similarity score for {agent_id}: {similarity:.4f}")
             
             if similarity > best_score:
                 best_score = similarity
                 best_agent = agent_id
         
-        print(f"🎯 Selected agent: {best_agent} (similarity: {best_score:.4f})")
+        print(f"[REGISTRY] Selected agent: {best_agent} (similarity: {best_score:.4f})")
         return best_agent
     
     def get_agent_info(self, agent_id: str) -> Optional[AgentInfo]:
