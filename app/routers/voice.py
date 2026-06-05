@@ -730,9 +730,6 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             "processing_time": "N/A"
         }
 
-        # Send status update after STT with detected language
-        await send_status("translating", detected_language)
-
     except Exception as e:
         error_str = str(e)
         results["stages"]["whisper_stt"] = {

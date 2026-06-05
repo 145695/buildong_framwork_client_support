@@ -8,11 +8,6 @@ STATUS_MESSAGES = {
         "fr": "Attends avec moi, je t'écoute",
         "en": "Wait with me, I'm listening to you"
     },
-    "translating": {
-        "ar": "انتظر معي، أنا أفهم رسالتك",
-        "fr": "Attends avec moi, je comprends ton message",
-        "en": "Wait with me, I'm understanding your message"
-    },
     "searching_kb": {
         "ar": "انتظر معي، أنا أبحث عن إجابة لسؤالك",
         "fr": "Attends avec moi, je cherche la réponse à ta question",
