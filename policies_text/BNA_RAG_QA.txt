@@ -1,0 +1,227 @@
+Banque Nationale d'Algérie
+Base de Connaissances — Optimisée pour la Recherche RAG
+Version 1.0 | Domaine : Services Bancaires
+NOTE RAG : Chaque entrée est délimitée par un identifiant unique (CHUNK ID), une étiquette d'intention et des mots-clés pour
+faciliter la segmentation et la récupération sémantique.
+CHUNK_ID: QA-001 | INTENT: Crédit Immobilier
+INTENTION : CRÉDIT IMMOBILIER
+Mots-clés : prêt | crédit immobilier | logement | PAP | LPA | LPP | VSP | hypothèque | promoteur
+Q : Je souhaite obtenir un prêt immobilier. Comment fonctionne le crédit immobilier à
+la BNA ?
+n Définition
+Le crédit immobilier BNA est destiné à financer les acquisitions d'habitations ou de logements individuels. Il propose
+12 formules couvrant tous vos projets immobiliers : construction, achat, aménagement et extension.
+n Procédure
+1. Choisir le type de logement souhaité (voir formules ci-dessous).
+2. Trouver un promoteur et obtenir le prix du bien.
+3. Fournir 3 fiches de paie récentes.
+4. Effectuer une simulation de crédit en agence BNA.
+n Les 12 Formules de Crédit
+(cid:127) Crédit pour la construction d'une habitation individuelle.
+(cid:127) Crédit pour l'acquisition d'un logement auprès d'un particulier.
+(cid:127) Crédit pour l'extension d'une habitation.
+(cid:127) Crédit pour l'aménagement d'une habitation.
+(cid:127) Crédit pour l'acquisition d'un logement neuf achevé.
+(cid:127) Crédit pour l'acquisition d'un logement promotionnel vendu sur plans (VSP).
+(cid:127) Crédit bonifié pour la construction d'une habitation rurale.
+(cid:127) Crédit bonifié pour la construction d'un logement groupé (Sud / Hauts Plateaux).
+(cid:127) Crédit bonifié pour l'acquisition d'un logement promotionnel aidé (LPA).
+(cid:127) Crédit bonifié pour l'acquisition d'un logement promotionnel public (LPP).
+(cid:127) Crédit bonifié pour l'acquisition d'un logement promotionnel collectif achevé.
+(cid:127) Crédit bonifié pour l'acquisition d'un logement promotionnel collectif vendu sur plan.
+n Éligibilité
+Toute personne :
+(cid:127) De nationalité algérienne.
+(cid:127) Âgée de moins de 75 ans.
+(cid:127) Résidente ou non résidente en Algérie.
+
+(cid:127) Avec un revenu stable et régulier :
+- Supérieur au SNMG (crédit non bonifié).
+- Entre 1× et 12× le SNMG (crédit bonifié).
+n Montant & Durée
+(cid:127) Financement jusqu'à 90 % du devis du bien ou des travaux.
+(cid:127) Financement jusqu'à 100 % pour les moins de 40 ans (crédit £ 20 millions DZD).
+(cid:127) Durée du crédit : jusqu'à 40 ans.
+n Taux d'intérêt
+Sans bonification :
+(cid:127) 6,25 % — clients non épargnants.
+(cid:127) 5,75 % — clients épargnants (min. 1 an d'intérêts cumulés).
+(cid:127) 6,00 % — emprunteurs de moins de 40 ans (financement 100 %).
+Avec bonification :
+(cid:127) 1 % — revenu entre 1× et 6× le SNMG.
+(cid:127) 3 % — revenu entre 6× et 12× le SNMG.
+n Différé de Remboursement
+(cid:127) 36 mois — formule VSP (vendu sur plans).
+(cid:127) 24 mois — auto-construction et extension.
+(cid:127) 6 mois (sur demande) — logement achevé neuf, acquisition auprès d'un particulier, ou aménagement.
+n Avantages
+(cid:127) Délai de traitement du dossier : 8 jours.
+(cid:127) Possibilité d'hypothéquer un autre bien si vous n'avez pas d'acte de propriété.
+(cid:127) Intégration du revenu d'un co-emprunteur ou d'une caution possible.
+(cid:127) Remboursement partiel ou intégral par anticipation autorisé.
+CHUNK_ID: QA-002 | INTENT: Dossier Crédit Immobilier
+INTENTION : DOSSIER CRÉDIT IMMOBILIER
+Mots-clés : dossier | documents | pièces justificatives | fiche de paie | acte de propriété | certificat | permis de construire | hypothèque
+| CREM | promoteur | VSP | auto-construction | extension | aménagement | logement achevé
+Q : Quels sont les documents à fournir pour constituer un dossier de crédit
+immobilier à la BNA ?
+n Documents Communs à Tous les Dossiers
+1. Demande de crédit suivant modèle BNA.
+2. Certificat de résidence.
+3. Fiche familiale d'état civil + copie de la pièce d'identité.
+4. Acte de naissance.
+5. Copie des 2 premières pages du livret d'épargne (pour les épargnants).
+
+6. Copie de la carte fiscale (entrepreneurs individuels : commerçants, artisans, professionnels).
+7. Attestation de travail récente + 3 dernières fiches de paie ou relevé des émoluments (salariés).
+8. Historique du compte bancaire ou postal des 12 derniers mois (salariés).
+9. 3 derniers avertissements fiscaux ou justificatif de revenu (non-salariés).
+10. Bilans et comptes de résultats des 3 derniers exercices (non-salariés, crédit > 20 M DA).
+11. Extrait de rôle de date récente (non-salariés).
+12. Autorisation de consultation de la C.R.E.M (Centrale des Risques Entreprises et Ménages).
+n A — Acquisition d'un Logement Achevé auprès d'un Particulier
+1. Copie de l'acte de propriété du logement.
+2. Certificat négatif d'hypothèque original (moins de 3 mois).
+3. Fiche de renseignements de l'opération (modèle BNA), signée par vendeur et acheteur.
+4. Rapport d'évaluation du logement (bureau d'études accrédité par la banque).
+n B — Acquisition d'un Logement Neuf Achevé auprès d'un Promoteur
+1. Décision d'affectation du logement, contrat de réservation ou tout document justifiant l'attribution du logement
+achevé (mentionnant prix de cession, consistance et adresse).
+n C — Acquisition sur Vente sur Plans (VSP)
+1. Contrat de vente sur plans notarié, enregistré et publié (Décret exécutif n13-431 du 18/12/2013).
+2. Attestation de garantie F.G.C.M.P.I en cours de validité.
+Note : Pour le crédit bonifié construction rurale, ajouter une décision d'octroi d'aide frontale CNL.
+n D — Auto-Construction
+1. Copie de l'acte de propriété du terrain (enregistré et publié) ou certificat de possession.
+2. Certificat négatif d'hypothèque du terrain original (moins de 3 mois).
+3. Copie du permis de construire en cours de validité.
+4. Devis quantitatif et descriptif des travaux (bureau d'études accrédité).
+5. Rapport d'évaluation du terrain (bureau d'études accrédité).
+6. Décision d'octroi d'aide CNL (crédit bonifié construction rurale uniquement).
+n E — Extension d'une Habitation
+1. Copie de l'acte de propriété de l'habitation (enregistré et publié).
+2. Copie de l'acte de propriété ou certificat de possession du terrain d'assiette.
+3. Certificat négatif d'hypothèque du terrain original (moins de 3 mois).
+4. Copie du permis de construire en cours de validité.
+5. Devis quantitatif et estimatif du coût de l'extension (bureau d'études accrédité).
+6. Rapport d'évaluation du terrain et de la construction (bureau d'études accrédité).
+n F — Travaux d'Aménagement de l'Habitation
+1. Devis estimatif et quantitatif du coût de l'aménagement (bureau d'études accrédité).
+2. Copie de l'acte de propriété du logement pris en hypothèque.
+3. Certificat négatif d'hypothèque du logement pris en hypothèque (moins de 3 mois).
+4. Rapport d'évaluation du logement pris en hypothèque (bureau d'études accrédité).
+
+CHUNK_ID: QA-003 | INTENT: Ouverture de Compte & Types de Comptes
+INTENTION : OUVERTURE DE COMPTE & TYPES DE COMPTES
+Mots-clés : compte chèque | compte devise | compte courant | compte épargne | finance islamique | ouverture de compte |
+préouverture | BNAtic | ebanking | rendez-vous | agence
+Q : Quels types de comptes bancaires sont disponibles à la BNA et comment ouvrir
+un compte ?
+n Types de Comptes Disponibles
+(cid:127) Compte chèque.
+(cid:127) Compte devise.
+(cid:127) Compte courant.
+(cid:127) Les comptes épargne.
+(cid:127) Les comptes relatifs à la Finance Islamique.
+n Service de Préouverture de Compte en Ligne
+Le service de préouverture de compte en ligne est gratuit, disponible 24h/24 et 7j/7.
+Il permet de démarrer la procédure d'ouverture de compte en ligne et de prendre un rendez-vous en agence BNA.
+La signature du contrat d'ouverture de compte se fait lors du rendez-vous fixé avec le chargé de clientèle.
+n Comment Accéder à la Plateforme de Préouverture
+(cid:127) Via l'application BN@tic (espace public, icône 'Ouvrir un compte').
+(cid:127) Via la plateforme e-banking BNA : https://ebanking.bna.dz/customer/ (bouton 'Ouverture compte en ligne').
+(cid:127) Via le site dédié : https://ouverture-de-compte.bna.dz/accountsignup/
+n Procédure en 4 Étapes
+1. Accéder à la plateforme via l'un des canaux disponibles.
+2. Remplir le formulaire en ligne.
+3. Scanner et téléverser les documents requis : acte de naissance, certificat de résidence, pièce d'identité (ou du
+tuteur légal).
+4. Choisir un rendez-vous en agence pour finaliser l'ouverture du compte.
+CHUNK_ID: QA-004 | INTENT: Cartes Bancaires
+INTENTION : CARTES BANCAIRES
+Mots-clés : carte CIB | carte prépayée | carte Elite | carte épargne | carte VISA | carte One Pay | retrait | paiement | plafond | DAB |
+GAB | TPE | SMS Card | ebanking | perte | vol | opposition | capture | interbancaire | débit différé
+Q : Quelles sont les cartes bancaires proposées par la BNA et quelles sont leurs
+caractéristiques ?
+n Carte CIB (Classique & Gold)
+Carte interbancaire adossée au compte chèque, disponible en deux versions selon le revenu :
+(cid:127) CIB Classique / CIB Gold.
+
+Fonctionnalités : retrait sur tous les automates, paiement en ligne, paiement TPE, consultation de solde, versement
+et virement sur GAB.
+Avantages : totalement gratuite, valide 3 ans, service SMS Card inclus (notifications en temps réel).
+Plafonds journaliers :
+(cid:127) CIB Classique : retrait 100 000 DA | paiement 100 000 DA.
+(cid:127) CIB Gold : retrait 150 000 DA | paiement 150 000 DA.
+n Carte CIB Prépayée
+Carte interbancaire alimentée par virement depuis le compte principal. Peut être au nom du titulaire ou d'un porteur
+désigné.
+Fonctionnalités : identiques à la CIB Classique/Gold.
+Avantages : meilleure gestion des dépenses, jusqu'à 10 cartes prépayées offertes à des proches, gratuite, valide 3
+ans.
+Plafonds journaliers :
+(cid:127) Retrait : 100 000 DA | Paiement : 80 000 DA | Par transaction : 80 000 DA.
+n Carte Elite (Particulier & Affaires)
+Carte interbancaire adossée au compte chèque, en deux versions :
+(cid:127) Carte Elite (particuliers) / Carte Affaires Elite (professionnels et entreprises).
+Fonctionnalités : retrait, paiement de proximité, paiement en ligne, virement, encaissements + services
+d'assistance.
+Avantages : capital décès jusqu'à 1 million DA, assistance routière, hébergement/transport pour visite d'un proche
+hospitalisé, SMS Card.
+Contact assisteur : 021 98 09 17.
+Plafonds journaliers :
+(cid:127) Retrait : 200 000 DA | Paiement : 500 000 DA | Par transaction : 500 000 DA.
+n Carte Épargne
+Carte de retrait adossée aux comptes épargne (avec ou sans intérêts, Moustakbaly, Épargne Plus).
+Fonctionnalités : retrait 24h/7j sur tous les automates, consultation de solde.
+Avantages : opérations sécurisées par code confidentiel, capital épargné disponible à tout moment, gratuite, valide
+3 ans.
+n Carte VISA (International)
+Carte de retrait et paiement à l'international (réseau VISA).
+Fonctionnalités : retrait, consultation de solde, changement de code PIN à l'étranger, paiement TPE VISA, paiement
+en ligne 24h/7j.
+Éligibilité : clients particuliers titulaires d'un compte devise en Euro ET d'un compte chèque en Dinars dans la même
+agence BNA.
+Conditions : solde minimum 8 000 DA sur compte chèque, minimum 100 Euros sur compte devise, absence
+d'incidents.
+Plafonds journaliers : 1 000 Euros ou 3 000 Euros (selon profil client).
+Tarification annuelle : 3 900 DA (plafond 1 000 Euros) / 4 900 DA (plafond 3 000 Euros).
+n Carte CIB One Pay (Débit Différé)
+
+Carte de retrait et paiement à débit différé, destinée aux titulaires de comptes chèques classiques.
+Fonctionnalités : consultation de solde et 10 dernières opérations, impression de RIB, retrait, paiement de proximité
+et en ligne, paiements différés à date fixe, suivi via BNAtic.
+Conditions : être solvable, avoir un revenu stable et régulier, être domicilié à la BNA.
+Fonctionnement : les paiements sont débités une fois par mois à date fixe. Suivi via E-Banking et BNAtic.
+Plafonds :
+(cid:127) Retrait journalier : 100 000 DA.
+(cid:127) Paiement mensuel : de 13 000 DA à 100 000 DA (selon profil client).
+n FAQ Cartes Bancaires
+Perte ou vol de carte CIB :
+1. Déclarer la perte auprès des autorités (gendarmerie, police).
+2. Faire opposition via la plateforme Ebanking (finaliser en agence sous 48h).
+3. Ou se présenter directement en agence si non adhérent à Ebanking.
+Carte capturée par un automate :
+Se présenter à l'agence du lieu de capture avec une pièce d'identité.
+Services carte Elite : contacter l'assisteur au 021 98 09 17.
+Comment acquérir une carte CIB : se présenter en agence BNA ou commander via la plateforme eBanking.
+Durée de validité de la carte CIB : 3 ans.
+CHUNK_ID: QA-005 | INTENT: Recouvrement & Hypothèque
+INTENTION : RECOUVREMENT & HYPOTHÈQUE
+Mots-clés : hypothèque | recouvrement | impayé | dette | gel de compte | saisie | mise en demeure | justice | crédit immobilier | crédit
+auto | entreprise | garantie | défaut de paiement
+Q : Que se passe-t-il si je ne rembourse pas mon crédit ? Quel est le processus de
+recouvrement de la BNA ?
+n Nature de la Garantie Hypothécaire
+La garantie hypothécaire porte sur le bien financé par le crédit :
+(cid:127) Crédit immobilier : le logement acquis grâce au crédit est mis en hypothèque.
+(cid:127) Crédit auto : le véhicule financé est mis en hypothèque.
+(cid:127) Crédit entreprise : le local ou bien professionnel financé est mis en hypothèque.
+En cas de non-remboursement, c'est ce bien qui sera saisi en dernier recours.
+n Processus de Recouvrement Étape par Étape
+(cid:127) 3 mois sans paiement : envoi d'une lettre de mise en demeure au client.
+(cid:127) 5 mois sans paiement : action en justice engagée par la BNA.
+(cid:127) 8 mois sans paiement : gel du compte bancaire du client.
+(cid:127) 12 mois sans paiement : saisie et exécution de l'hypothèque sur le bien financé.
+
+Document généré automatiquement pour usage interne RAG — BNA Système Multi-Agents | Toute reproduction non autorisée est interdite.

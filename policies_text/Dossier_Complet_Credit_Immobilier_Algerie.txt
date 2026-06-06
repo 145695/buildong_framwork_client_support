@@ -1,0 +1,61 @@
+GUIDE COMPLET DU CRÉDIT
+IMMOBILIER EN ALGÉRIE
+Analyse Technique, Financière et Juridique
+Simulation complète : Conditions, Calculs et Garanties
+Document de Synthèse Intégrale
+
+I. PRÉSENTATION DU CRÉDIT IMMOBILIER
+Le crédit immobilier est un prêt de longue durée destiné à l'acquisition, la construction
+ou l'extension d'un logement. C'est un crédit amortissable à taux fixe.
+Acteurs et Conditions de base
+• Établissements : Toutes les banques publiques (CNEP, BNA, etc.) et privées.
+• Taux Fixe : Librement fixé par la banque (entre 6,5% et 7,5% actuellement), sans
+dépasser le taux excessif de la Banque d'Algérie.
+• Durée : Jusqu'à 30 ou 40 ans (limite d'âge de 70-75 ans).
+• Apport Personnel : Généralement 10% (Financement à 90%), sauf cas particuliers
+(Prêt Jeune 100%).
+II. CONSTITUTION DU DOSSIER
+Documents Personnels & Revenus
+• Identité : Acte de naissance, fiche familiale, CNI/Permis.
+• Revenus Salariés : Relevé des émoluments, DAS, attestation de travail.
+• Revenus Libéraux : Registre de commerce, dernier avertissement fiscal.
+Justificatifs de Projet
+Selon le type : Promesse de vente notariée, décision d'attribution (LPA/LSP), permis de
+construire ou contrat de vente sur plan (VSP).
+
+III. ANALYSE FINANCIÈRE ET ENDETTEMENT
+Capacité de Remboursement et Reste à Vivre
+Le RMN (Revenu Mensuel Net) exclut les primes variables. Le Reste à Vivre est le critère
+prioritaire (revenus moins charges fixes).
+Te = (Mensualités × 100) / RMN
+Barème d'Endettement Indicatif (CNEP)
+Revenu Net Mensuel Salariés Commerçants / Libéraux
+≤ 2 × SNMG 30% 40%
+2 < RMN ≤ 4 × SNMG 40% 45%
+4 < RMN ≤ 8 × SNMG 50% 55%
+> 8 × SNMG 55% 60%
+IV. TAUX BONIFIÉS (AIDES DE L'ÉTAT)
+• Taux 1% : Revenus ≤ 6 × SNMG (Logement collectif/rural).
+• Taux 3% : Revenus entre 6 et 12 × SNMG.
+• Prêts Trésor : 1% pour les fonctionnaires (≤ 60 ans) avec plafonds de 2 à 7
+millions de DA selon le grade et le projet.
+
+V. ÉTUDE DE CAS (SIMULATION MR X)
+Profil : 33 ans, Revenu 89 263 DA.
+Durée calculée : Min(70-33, 40) = 37 ans (dont 3 ans de différé).
+MMC (Montant Max) : Basé sur VT (0,002892224) = 15 431 506 DA.
+Crédit Accordé : 4 840 000 DA à 1%.
+Calcul de la Mensualité Réelle
+• Échéance (Cap+Int) : 4 840 000 × 0,002892224 = 13 997,54 DA.
+• Assurance Décès (0,037%) : 1 790,80 DA.
+• Mensualité Totale : 15 788,34 DA.
+Frais Initiaux et SGCI
+• Assurance SGCI (Ratio RPV 80%) : 1% HT + TVA = 871 200 DA.
+• Intérêts Intercalaires (Différé) : 4 033,33 DA / mois.
+• Commissions + TVA : 17 250 DA TTC.
+Total des frais de mise en place : 909 939,60 DA.
+VI. RÉFÉRENCES LÉGALES
+- Ordonnance 09-01 (LFC 2009) | Loi 09-09 (LF 2010)
+- Décret 10-87 (Bonification Logement collectif/rural)
+- Décret 10-166 (Prêts Trésor Fonctionnaires)
+Document Intégral - Mai 2026 - Crédit Immobilier Algérie
