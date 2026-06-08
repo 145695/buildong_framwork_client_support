@@ -19,8 +19,10 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Use the built-in Jenkins workspace variable to pass the exact path context
-                    builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
+                    // This bypasses local file paths entirely. 
+                    // It tells your Windows Docker engine to fetch the code straight from GitHub
+                    // using your specific branch (#final) to build it cleanly!
+                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} https://github.com/145695/buildong_framwork_client_support.git#final"
                 }
             }
         }
