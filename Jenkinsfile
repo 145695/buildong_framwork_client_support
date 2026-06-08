@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'docker:latest'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
     
     environment {
         DOCKER_IMAGE = "mariaboukhelfa2025/bna-client-support"
@@ -22,7 +17,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                    // Build Docker image using native Docker Pipeline Plugin
+                    env.BUILT_IMAGE = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
                 }
             }
         }
@@ -30,8 +26,8 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    // Start container and run health check
-                    docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").inside('-p 8000:8000') {
+                    // Start container and run health check using built image
+                    env.BUILT_IMAGE.inside('-p 8000:8000') {
                         sh '''
                             # Wait for app to start
                             sleep 30
@@ -55,9 +51,10 @@ pipeline {
             }
             steps {
                 script {
+                    // Push to Docker Hub using native Docker Pipeline Plugin
                     docker.withRegistry("https://${REGISTRY}", 'docker-hub-credentials') {
-                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
-                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push('latest')
+                        env.BUILT_IMAGE.push()
+                        env.BUILT_IMAGE.push('latest')
                     }
                 }
             }
@@ -82,8 +79,16 @@ pipeline {
     
     post {
         always {
-            // Clean up
-            sh 'docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true'
+            script {
+                // Safe cleanup using Docker Pipeline Plugin
+                try {
+                    if (env.BUILT_IMAGE) {
+                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").delete()
+                    }
+                } catch (Exception e) {
+                    echo "Cleanup failed: ${e.getMessage()}"
+                }
+            }
         }
         success {
             echo "Pipeline succeeded!"
