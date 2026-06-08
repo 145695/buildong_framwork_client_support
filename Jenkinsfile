@@ -19,9 +19,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // CRITICAL: We pass the directory path ('.') directly to the plugin API.
-                    // This tells the plugin to handle the build without using a terminal shell.
-                    builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", ".")
+                    // Use the built-in Jenkins workspace variable to pass the exact path context
+                    builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
                 }
             }
         }
