@@ -45,6 +45,7 @@ pipeline {
                     branch 'main'
                     branch 'master'
                     branch 'origin'
+                    branch 'final'
                 }
             }
             steps {
@@ -63,6 +64,7 @@ pipeline {
                     branch 'main'
                     branch 'master'
                     branch 'origin'
+                    branch 'final'
                 }
             }
             steps {
