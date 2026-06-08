@@ -44,6 +44,7 @@ pipeline {
                 anyOf {
                     branch 'main'
                     branch 'master'
+                    branch 'origin'
                 }
             }
             steps {
@@ -61,6 +62,7 @@ pipeline {
                 anyOf {
                     branch 'main'
                     branch 'master'
+                    branch 'origin'
                 }
             }
             steps {
