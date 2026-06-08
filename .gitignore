@@ -15,7 +15,6 @@ chroma_db/
 
 # Large policy PDF files
 policies/
-policies_text/
 
 # Large model files
 **/model.safetensors

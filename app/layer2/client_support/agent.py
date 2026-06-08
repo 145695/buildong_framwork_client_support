@@ -70,7 +70,7 @@ def client_support_node(state: ConversationState) -> ConversationState:
             f"Customer question: {question}\n"
             f"Intent: {intent}\n"
             f"Knowledge base information: {kb_result if kb_result else 'No knowledge base result available.'}\n"
-            f"{f'Loan evaluation: {loan_result}\n' if loan_result else ''}"
+            f"{f'Loan evaluation: {loan_result}' if loan_result else ''}\n"
             "Use the knowledge base information above to answer clearly for the customer.\n"
             "If the KB answer is not available, say you will help them find the right answer or direct them to the branch.\n\n"
             "Answer:"

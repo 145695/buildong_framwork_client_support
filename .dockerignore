@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Virtual environment
+.venv
+venv/
+ENV/
+env/
+
+# Runtime write directories (from audit)
+.uploads/
+outputs/
+chroma_db/
+knowledgebase/vector_cache/
+
+# Embedded git repository (from audit)
+python-clients/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files and results
+tests/
+test_results.json
+rag_eval_*
+
+# Large files - but keep model.safetensors for intent classifier
+# *.safetensors
+# **/model.safetensors
+
+# Policies (large PDFs)
+policies/
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: bna-client-support
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Runtime write directories from audit
+      - ./outputs:/app/outputs
+      - ./knowledgebase/vector_cache:/app/knowledgebase/vector_cache
+      - ./chroma_db:/app/chroma_db
+      - ./.uploads:/app/.uploads
+      # System temp directory for temporary audio files
+      - /tmp:/tmp
+    restart: unless-stopped

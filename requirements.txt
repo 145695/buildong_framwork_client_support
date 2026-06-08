@@ -1,56 +1,85 @@
 # FastAPI and web framework
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6
+fastapi==0.135.3
+uvicorn==0.44.0
+python-multipart==0.0.24
+starlette==1.0.0
 
-# Pydantic for data validation
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
+# Pydantic
+pydantic==2.10.6
+pydantic-settings==2.13.1
 
 # Environment variables
-python-dotenv>=1.0.0
+python-dotenv==1.0.0
 
 # Audio processing
-numpy>=1.24.0
-soundfile>=0.12.0
-webrtcvad>=2.0.10
+numpy==1.26.4
+soundfile==0.13.1
+webrtcvad==2.0.10
+librosa==0.11.0
+pydub==0.25.1
 
-# TTS (Text-to-Speech)
-kokoro-onnx>=0.1.0
-f5-tts>=0.1.0
-gtts>=2.5.0
+# TTS
+kokoro==0.9.4
+misaki==0.9.4
+espeakng-loader==0.2.4
+phonemizer-fork==3.3.2
+vocos==0.1.0
+f5-tts==1.1.17
+gtts==2.5.4
 
 # Translation
-deep-translator>=1.11.0
-langchain-nvidia-ai-endpoints>=0.1.0
+deep-translator==1.11.4
+langchain-nvidia-ai-endpoints==1.3.0
 
-# LLM and AI models
-transformers>=4.35.0
-torch>=2.0.0
-sentence-transformers>=2.2.0
+# LLM and AI
+transformers==4.51.3
+torch==2.10.0
+sentence-transformers==3.0.1
+accelerate==1.13.0
+safetensors==0.7.0
+langgraph==1.1.6
+langgraph-checkpoint==4.0.1
+langgraph-prebuilt==1.0.9
+langchain-core==1.3.0
+langchain-openai==1.1.14
+mistralai==1.5.0
+groq==0.4.0
+openai==2.32.0
 
-# Vector database and embeddings
-faiss-cpu>=1.7.4
-chromadb>=0.4.0
+# Vector database
+faiss-cpu==1.13.2
+chromadb==0.5.3
 
 # Security
-llm-guard>=0.3.0
+llm-guard==0.3.16
+presidio-analyzer==2.2.358
+presidio-anonymizer==2.2.358
+
+# NLP
+spacy==3.8.14
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
+en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl#sha256=293e9547a655b25499198ab15a525b05b9407a75f10255e405e8c3854329ab63
 
 # PDF processing
-pdfplumber>=0.10.0
+pdfplumber==0.11.9
 
 # HTTP client
-httpx>=0.25.0
+httpx==0.28.1
+requests==2.33.1
+gradio_client==2.4.1
+
+# gRPC for NVIDIA Riva
+grpcio==1.80.0
+grpcio-tools==1.80.0
+nvidia-riva-client==2.25.1
 
 # Data processing
-pandas>=2.0.0
+pandas==2.3.3
+matplotlib==3.10.8
+scikit-learn==1.7.2
+scipy==1.15.3
 
-# Visualization (for RAG evaluation)
-matplotlib>=3.7.0
-
-# Logging and utilities
-logging>=0.4.9.6
-
-# NVIDIA Riva clients (for STT)
-# Note: These need to be installed from NVIDIA's python-clients repository
-# python-clients/nvidia-riva-client>=2.0.0
+# Utilities
+tqdm==4.67.3
+loguru==0.7.3
+tenacity==8.5.0
