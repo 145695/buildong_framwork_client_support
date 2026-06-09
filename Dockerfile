@@ -33,12 +33,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 4. Clone NVIDIA Riva python-clients locally inside the container environment
 RUN git clone https://github.com/nvidia-riva/python-clients.git python-clients
 
-# REMOVED: Duplicate spaCy download commands (already handled inside requirements.txt)
-
 # 5. Copy the RoBERTa intent classifier local model directory explicitly
 COPY app/layer2/orchestrator/bna_intent_classifier/ /app/bna_intent_classifier/
 
-# 6. Copy the entire remaining application source code
+# 6. Copy the entire remaining application source code (model dir excluded via .dockerignore)
 COPY . .
 
 # 7. Pre-create application runtime write directories to prevent permission issues
