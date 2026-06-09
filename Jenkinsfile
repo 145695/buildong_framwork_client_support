@@ -1,4 +1,3 @@
-// 1. FIXED: Declared globally out here so both Build and Push stages can see it
 def builtImage
 
 pipeline {
@@ -20,7 +19,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // 2. FIXED: Removed 'def' here so it assigns to the global variable
                     builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
                 }
             }
@@ -37,11 +35,20 @@ pipeline {
         
         stage('Push to Registry') {
             steps {
-                script {
-                    docker.withRegistry("https://${REGISTRY}", 'docker-hub-credentials') {
-                        builtImage.push()
-                        builtImage.push('latest')
-                    }
+                // We use standard withCredentials to securely pass the token as a variable
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-token-new', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_TOKEN')]) {
+                    sh """
+                        # Force a clean login inside the Jenkins workspace shell environment
+                        echo "${DOCKER_TOKEN}" | docker login -u "${DOCKER_USER}" --password-stdin
+                        
+                        # Explicitly tag and push using native Docker commands
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                        docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker push ${DOCKER_IMAGE}:latest
+                        
+                        # Clean up authorization files immediately after pushing
+                        docker logout
+                    """
                 }
             }
         }
@@ -51,7 +58,6 @@ pipeline {
                 script {
                     echo "Deploying ${DOCKER_IMAGE}:${DOCKER_TAG}"
                     
-                    // 3. FIXED: Clean and name the local container using the new maces designation
                     sh "docker rm -f maces-app-test || true"
                     
                     withCredentials([file(credentialsId: 'bna-prod-env', variable: 'PROD_ENV_FILE')]) {
