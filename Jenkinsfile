@@ -32,11 +32,7 @@ pipeline {
         }
         
         stage('Push to Registry') {
-            when {
-                anyOf {
-                    branch 'main'; branch 'master'; branch 'origin'; branch 'final'
-                }
-            }
+            // REMOVED 'when' block so it always runs
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY}", 'docker-hub-credentials') {
@@ -48,22 +44,14 @@ pipeline {
         }
         
         stage('Deploy') {
-            when {
-                anyOf {
-                    branch 'main'; branch 'master'; branch 'origin'; branch 'final'
-                }
-            }
+            // REMOVED 'when' block so it always runs
             steps {
                 script {
                     echo "Deploying ${DOCKER_IMAGE}:${DOCKER_TAG}"
                     
-                    // 1. Clean out the old local test container
                     sh "docker rm -f bna-app-test || true"
                     
-                    // 2. Fetch the secure runtime production .env file from Jenkins secure store
                     withCredentials([file(credentialsId: 'bna-prod-env', variable: 'PROD_ENV_FILE')]) {
-                        
-                        // 3. Launch container utilizing the secured environment file directly
                         sh """
                             docker run -d -p 8000:8000 \
                             --env-file '${PROD_ENV_FILE}' \
@@ -72,7 +60,7 @@ pipeline {
                         """
                     }
                     
-                    echo "Deployment completed successfully using centralized environment configurations!"
+                    echo "Deployment completed successfully!"
                 }
             }
         }
