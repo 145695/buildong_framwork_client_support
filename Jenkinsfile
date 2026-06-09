@@ -19,7 +19,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
+                    sh "docker build --platform linux/amd64 -t ${DOCKER_IMAGE}:${DOCKER_TAG} -f Dockerfile ."
                 }
             }
         }
@@ -59,6 +59,7 @@ pipeline {
                     withCredentials([file(credentialsId: 'bna-prod-env', variable: 'PROD_ENV_FILE')]) {
                         sh """
                             docker run -d -p 8000:8000 \
+                            --platform linux/amd64 \
                             --env-file '${PROD_ENV_FILE}' \
                             --name maces-app-test \
                             ${DOCKER_IMAGE}:${DOCKER_TAG}
