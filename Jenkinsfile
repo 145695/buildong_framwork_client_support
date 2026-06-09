@@ -1,3 +1,6 @@
+// 1. FIXED: Declared globally out here so both Build and Push stages can see it
+def builtImage
+
 pipeline {
     agent any
     
@@ -17,7 +20,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                   def builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
+                    // 2. FIXED: Removed 'def' here so it assigns to the global variable
+                    builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
                 }
             }
         }
@@ -32,7 +36,6 @@ pipeline {
         }
         
         stage('Push to Registry') {
-            // REMOVED 'when' block so it always runs
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY}", 'docker-hub-credentials') {
@@ -44,18 +47,18 @@ pipeline {
         }
         
         stage('Deploy') {
-            // REMOVED 'when' block so it always runs
             steps {
                 script {
                     echo "Deploying ${DOCKER_IMAGE}:${DOCKER_TAG}"
                     
-                    sh "docker rm -f bna-app-test || true"
+                    // 3. FIXED: Clean and name the local container using the new maces designation
+                    sh "docker rm -f maces-app-test || true"
                     
                     withCredentials([file(credentialsId: 'bna-prod-env', variable: 'PROD_ENV_FILE')]) {
                         sh """
                             docker run -d -p 8000:8000 \
                             --env-file '${PROD_ENV_FILE}' \
-                            --name bna-app-test \
+                            --name maces-app-test \
                             ${DOCKER_IMAGE}:${DOCKER_TAG}
                         """
                     }
