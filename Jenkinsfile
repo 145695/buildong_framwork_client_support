@@ -1,5 +1,3 @@
-def builtImage
-
 pipeline {
     agent any
     
@@ -19,10 +17,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // This bypasses local file paths entirely. 
-                    // It tells your Windows Docker engine to fetch the code straight from GitHub
-                    // using your specific branch (#final) to build it cleanly!
-                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} https://github.com/145695/buildong_framwork_client_support.git#final"
+                    // Fixed: By using the Jenkins docker tool block, 'builtImage' is successfully
+                    // captured as an object so that the push() stage below works perfectly!
+                    builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
                 }
             }
         }
@@ -47,7 +44,8 @@ pipeline {
             }
             steps {
                 script {
-                    // This uses the plugin to securely upload your image
+                    // This securely logs into Docker Hub using your saved Jenkins credentials
+                    // and uploads both the build number tag and the 'latest' tag automatically.
                     docker.withRegistry("https://${REGISTRY}", 'docker-hub-credentials') {
                         builtImage.push()
                         builtImage.push('latest')
