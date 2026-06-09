@@ -1,11 +1,11 @@
-# ============================================
-# Stage 1: Builder - Download models and dependencies
-# ============================================
-FROM python:3.10-slim as builder
+# ==============================================================================
+# Optimized Runtime Environment - Minimal and Ultra Fast Jenkins Pipeline Build
+# ==============================================================================
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# 1. Install all system dependencies required for audio, cloning, and compilation
 RUN apt-get update && apt-get install -y \
     git \
     ffmpeg \
@@ -15,70 +15,32 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# 2. Copy the Python dependencies list and install them safely
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Clone NVIDIA Riva python-clients
+# 3. Clone NVIDIA Riva python-clients locally inside the container environment
 RUN git clone https://github.com/nvidia-riva/python-clients.git python-clients
 
-# Pre-download models during build
-# 1. Kokoro TTS models (EN and FR)
-RUN python -c "from kokoro import KPipeline; KPipeline(lang_code='a'); KPipeline(lang_code='f')"
-
-# 2. SentenceTransformer model for embeddings
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
-
-# 3. Download spacy models (already in requirements, but ensure they're cached)
+# 4. Download spaCy NLP models (safe and fast to cache directly during build time)
 RUN python -m spacy download en_core_web_sm
 RUN python -m spacy download en_core_web_lg
 
-# 4. Download transformers cache for common models
-RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('bert-base-uncased')"
-RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('roberta-base')"
-
-# ============================================
-# Stage 2: Runtime - Minimal image with pre-downloaded models
-# ============================================
-FROM python:3.10-slim
-
-WORKDIR /app
-
-# Install only runtime system dependencies
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    espeak-ng \
-    libsndfile1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy Python dependencies from builder
-COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy NVIDIA Riva python-clients
-COPY --from=builder /app/python-clients /app/python-clients
-
-# Copy cached models from builder
-COPY --from=builder /root/.cache/huggingface /root/.cache/huggingface
-# Torch cache may not exist, skip if not present
-
-# Copy the RoBERTa intent classifier local model
+# 5. Copy the RoBERTa intent classifier local model directory explicitly
 COPY app/layer2/orchestrator/bna_intent_classifier/ /app/bna_intent_classifier/
 
-# Copy application code
+# 6. Copy the entire remaining application source code
 COPY . .
 
-# Create runtime write directories
+# 7. Pre-create application runtime write directories to prevent permission issues
 RUN mkdir -p outputs knowledgebase/vector_cache chroma_db .uploads
 
-# Expose port
+# 8. Expose network port for the application API layer
 EXPOSE 8000
 
-# Copy entrypoint script
+# 9. Copy and configure the shell execution permissions for the entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Set entrypoint
+# 10. Execute the initialization runner script
 ENTRYPOINT ["/entrypoint.sh"]
