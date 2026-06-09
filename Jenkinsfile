@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_IMAGE = "mariaboukhelfa2025/bna-client-support"
+        DOCKER_IMAGE = "mariaboukhelfa2025/maces"
         DOCKER_TAG = "${env.BUILD_NUMBER}"
         REGISTRY = "docker.io"
     }
