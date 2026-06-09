@@ -16,9 +16,5 @@ chroma_db/
 # Large policy PDF files
 policies/
 
-# Large model files
-**/model.safetensors
-*.safetensors
-
 # Embedded git repository
 python-clients/
