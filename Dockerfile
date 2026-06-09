@@ -15,16 +15,25 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Copy the Python dependencies list and install them safely
+# 2. Non-sensitive Application Configurations (Baked into the image)
+ENV LANGCHAIN_TRACING_V2=true \
+    LANGCHAIN_PROJECT="bna-multi-agent" \
+    AUDIO_SAMPLE_RATE=16000 \
+    AUDIO_CHUNK_SIZE=512 \
+    SILENCE_DURATION_SEC=1.2 \
+    VAD_AGGRESSIVENESS=2 \
+    WS_BUFFER_MAX_SIZE=5242880 \
+    AUDIO_PROCESSING_TIMEOUT=30 \
+    RESPONSE_STREAMING_TIMEOUT=60
+
+# 3. Copy the Python dependencies list and install them safely
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Clone NVIDIA Riva python-clients locally inside the container environment
+# 4. Clone NVIDIA Riva python-clients locally inside the container environment
 RUN git clone https://github.com/nvidia-riva/python-clients.git python-clients
 
-# 4. Download spaCy NLP models (safe and fast to cache directly during build time)
-RUN python -m spacy download en_core_web_sm
-RUN python -m spacy download en_core_web_lg
+# REMOVED: Duplicate spaCy download commands (already handled inside requirements.txt)
 
 # 5. Copy the RoBERTa intent classifier local model directory explicitly
 COPY app/layer2/orchestrator/bna_intent_classifier/ /app/bna_intent_classifier/

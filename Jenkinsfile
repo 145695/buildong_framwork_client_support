@@ -17,8 +17,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Fixed: By using the Jenkins docker tool block, 'builtImage' is successfully
-                    // captured as an object so that the push() stage below works perfectly!
                     builtImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", "-f Dockerfile .")
                 }
             }
@@ -36,16 +34,11 @@ pipeline {
         stage('Push to Registry') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'master'
-                    branch 'origin'
-                    branch 'final'
+                    branch 'main'; branch 'master'; branch 'origin'; branch 'final'
                 }
             }
             steps {
                 script {
-                    // This securely logs into Docker Hub using your saved Jenkins credentials
-                    // and uploads both the build number tag and the 'latest' tag automatically.
                     docker.withRegistry("https://${REGISTRY}", 'docker-hub-credentials') {
                         builtImage.push()
                         builtImage.push('latest')
@@ -57,14 +50,30 @@ pipeline {
         stage('Deploy') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'master'
-                    branch 'origin'
-                    branch 'final'
+                    branch 'main'; branch 'master'; branch 'origin'; branch 'final'
                 }
             }
             steps {
-                echo "Deploying ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                script {
+                    echo "Deploying ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    
+                    // 1. Clean out the old local test container
+                    sh "docker rm -f bna-app-test || true"
+                    
+                    // 2. Fetch the secure runtime production .env file from Jenkins secure store
+                    withCredentials([file(credentialsId: 'bna-prod-env', variable: 'PROD_ENV_FILE')]) {
+                        
+                        // 3. Launch container utilizing the secured environment file directly
+                        sh """
+                            docker run -d -p 8000:8000 \
+                            --env-file '${PROD_ENV_FILE}' \
+                            --name bna-app-test \
+                            ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        """
+                    }
+                    
+                    echo "Deployment completed successfully using centralized environment configurations!"
+                }
             }
         }
     }
