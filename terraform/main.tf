@@ -35,7 +35,30 @@ resource "azurerm_container_group" "maces" {
     server   = "index.docker.io"
   }
 
-  # Container 1: Voice Processing (STT + Translation + TTS)
+  # Container 1: Knowledge Base (START FIRST - 0s)
+  container {
+    name   = "kb-processor"
+    image  = "mariaboukhelfa2025/maces:latest"
+    cpu    = "1"
+    memory = "2"
+
+    ports {
+      port     = 8003
+      protocol = "TCP"
+    }
+
+    environment_variables = {
+      SERVICE_TYPE         = "kb-service"
+      PYTHONUNBUFFERED     = "1"
+    }
+
+    commands = [
+      "sh", "-c",
+      "echo '[KB] Waiting 10s before startup...' && sleep 10 && python -m uvicorn app.kb_service:app --host 0.0.0.0 --port 8003 --workers 1"
+    ]
+  }
+
+  # Container 2: Voice Processing (START AFTER KB - 60s)
   container {
     name   = "voice-processor"
     image  = "mariaboukhelfa2025/maces:latest"
@@ -48,15 +71,11 @@ resource "azurerm_container_group" "maces" {
     }
 
     environment_variables = {
-      SERVICE_TYPE              = "voice-service"
-      PYTHONUNBUFFERED          = "1"
-      AUDIO_SAMPLE_RATE         = "16000"
-      AUDIO_CHUNK_SIZE          = "256"
-      SILENCE_DURATION_SEC      = "0.8"
-      VAD_AGGRESSIVENESS        = "3"
-      LOAD_VOICE_MODELS         = "true"
-      RIVA_FUNCTION_ID          = "b702f636-f60c-4a3d-a6f4-f3568c13bd7d"
-      RIVA_COMMAND_TIMEOUT      = "120"
+      SERVICE_TYPE         = "voice-service"
+      PYTHONUNBUFFERED     = "1"
+      LOAD_VOICE_MODELS    = "true"
+      RIVA_FUNCTION_ID     = "b702f636-f60c-4a3d-a6f4-f3568c13bd7d"
+      RIVA_COMMAND_TIMEOUT = "120"
     }
 
     secure_environment_variables = {
@@ -64,12 +83,12 @@ resource "azurerm_container_group" "maces" {
     }
 
     commands = [
-      "python", "-m", "uvicorn", "app.voice_service:app",
-      "--host", "0.0.0.0", "--port", "8001", "--workers", "1"
+      "sh", "-c",
+      "echo '[Voice] Waiting 60s for KB to stabilize...' && sleep 60 && python -m uvicorn app.voice_service:app --host 0.0.0.0 --port 8001 --workers 1"
     ]
   }
 
-  # Container 2: LLM & Security Processing
+  # Container 3: LLM Processing (START AFTER VOICE - 120s)
   container {
     name   = "llm-processor"
     image  = "mariaboukhelfa2025/maces:latest"
@@ -82,12 +101,8 @@ resource "azurerm_container_group" "maces" {
     }
 
     environment_variables = {
-      SERVICE_TYPE              = "llm-service"
-      PYTHONUNBUFFERED          = "1"
-      RIVA_FUNCTION_ID          = "b702f636-f60c-4a3d-a6f4-f3568c13bd7d"
-      RIVA_COMMAND_TIMEOUT      = "120"
-      LANGCHAIN_TRACING_V2      = "true"
-      LANGCHAIN_PROJECT         = "maces-multi-agent"
+      SERVICE_TYPE     = "llm-service"
+      PYTHONUNBUFFERED = "1"
     }
 
     secure_environment_variables = {
@@ -103,38 +118,12 @@ resource "azurerm_container_group" "maces" {
     }
 
     commands = [
-      "python", "-m", "uvicorn", "app.llm_service:app",
-      "--host", "0.0.0.0", "--port", "8002", "--workers", "1"
+      "sh", "-c",
+      "echo '[LLM] Waiting 120s for Voice to stabilize...' && sleep 120 && python -m uvicorn app.llm_service:app --host 0.0.0.0 --port 8002 --workers 1"
     ]
   }
 
-  # Container 3: Knowledge Base Search
-  container {
-    name   = "kb-processor"
-    image  = "mariaboukhelfa2025/maces:latest"
-    cpu    = "1"
-    memory = "2"
-
-    ports {
-      port     = 8003
-      protocol = "TCP"
-    }
-
-    environment_variables = {
-      SERVICE_TYPE              = "kb-service"
-      PYTHONUNBUFFERED          = "1"
-      LANGCHAIN_TRACING_V2      = "true"
-      LANGCHAIN_PROJECT         = "maces-multi-agent"
-      MISTRAL_API_KEY           = var.mistral_api_key
-    }
-
-    commands = [
-      "python", "-m", "uvicorn", "app.kb_service:app",
-      "--host", "0.0.0.0", "--port", "8003", "--workers", "1"
-    ]
-  }
-
-  # Container 4: Main API Gateway
+  # Container 4: API Gateway (START LAST - 180s)
   container {
     name   = "api-gateway"
     image  = "mariaboukhelfa2025/maces:latest"
@@ -147,16 +136,16 @@ resource "azurerm_container_group" "maces" {
     }
 
     environment_variables = {
-      SERVICE_TYPE              = "api-gateway"
-      PYTHONUNBUFFERED          = "1"
-      VOICE_SERVICE_URL         = "http://localhost:8001"
-      LLM_SERVICE_URL           = "http://localhost:8002"
-      KB_SERVICE_URL            = "http://localhost:8003"
+      SERVICE_TYPE      = "api-gateway"
+      PYTHONUNBUFFERED  = "1"
+      VOICE_SERVICE_URL = "http://localhost:8001"
+      LLM_SERVICE_URL   = "http://localhost:8002"
+      KB_SERVICE_URL    = "http://localhost:8003"
     }
 
     commands = [
-      "python", "-m", "uvicorn", "app.api_gateway:app",
-      "--host", "0.0.0.0", "--port", "8000", "--workers", "1"
+      "sh", "-c",
+      "echo '[Gateway] Waiting 180s for all services...' && sleep 180 && python -m uvicorn app.api_gateway:app --host 0.0.0.0 --port 8000 --workers 1"
     ]
   }
 
@@ -171,7 +160,7 @@ resource "azurerm_container_group" "maces" {
 
 output "application_url" {
   value       = "http://${azurerm_container_group.maces.fqdn}:8000"
-  description = "Full URL to access the MACES application"
+  description = "URL to access the MACES application"
 }
 
 output "fqdn" {
@@ -188,39 +177,20 @@ output "deployment_summary" {
   value = <<EOF
 
 ╔═══════════════════════════════════════════════════════════╗
-║     MACES - Microservices Architecture                    ║
+║     MACES - Microservices (Staggered Startup)             ║
 ╠═══════════════════════════════════════════════════════════╣
-║ Total: 4 CPUs / 8 GB Memory                              ║
 ║                                                           ║
-║ Voice Processor (Port 8001): 1.5 CPU / 3 GB               ║
-║   → STT, Translation, TTS (Kokoro)                        ║
+║  t+10s   KB Processor      (Port 8003)  1 CPU / 2 GB     ║
+║  t+60s   Voice Processor   (Port 8001)  1.5 CPU / 3 GB   ║
+║  t+120s  LLM Processor     (Port 8002)  1 CPU / 2 GB     ║
+║  t+180s  API Gateway       (Port 8000)  0.5 CPU / 1 GB   ║
 ║                                                           ║
-║ LLM Processor (Port 8002): 1 CPU / 2 GB                   ║
-║   → Security, Agents, NVIDIA API                          ║
+║  Total: 4 CPUs / 8 GB Memory                             ║
 ║                                                           ║
-║ KB Processor (Port 8003): 1 CPU / 2 GB                    ║
-║   → Document search, embeddings                           ║
-║                                                           ║
-║ API Gateway (Port 8000): 0.5 CPU / 1 GB                   ║
-║   → WebSocket, HTTP routing                               ║
-║                                                           ║
-║ URL: http://${azurerm_container_group.maces.fqdn}:8000
-║ FQDN: ${azurerm_container_group.maces.fqdn}
-║ IP:   ${azurerm_container_group.maces.ip_address}
+║  URL: http://${azurerm_container_group.maces.fqdn}:8000
+║  FQDN: ${azurerm_container_group.maces.fqdn}
 ╚═══════════════════════════════════════════════════════════╝
 
-Check services:
-  curl http://localhost:8000/health
-
-Monitor logs:
-  az container logs -g maces-rg -n maces-app --container-name api-gateway
-  az container logs -g maces-rg -n maces-app --container-name voice-processor
-  az container logs -g maces-rg -n maces-app --container-name llm-processor
-  az container logs -g maces-rg -n maces-app --container-name kb-processor
-
-Destroy:
-  terraform destroy
-
 EOF
-  description = "Complete deployment summary"
+  description = "Deployment summary"
 }
