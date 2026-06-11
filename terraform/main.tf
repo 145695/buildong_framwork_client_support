@@ -55,8 +55,12 @@ resource "azurerm_container_group" "maces" {
       SILENCE_DURATION_SEC      = "0.8"
       VAD_AGGRESSIVENESS        = "3"
       LOAD_VOICE_MODELS         = "true"
-      LLM_SERVICE_URL           = "http://localhost:8002"
-      KB_SERVICE_URL            = "http://localhost:8003"
+      RIVA_FUNCTION_ID          = "b702f636-f60c-4a3d-a6f4-f3568c13bd7d"
+      RIVA_COMMAND_TIMEOUT      = "120"
+    }
+
+    secure_environment_variables = {
+      NVIDIA_API_KEY = var.nvidia_api_key
     }
 
     commands = [
@@ -82,7 +86,8 @@ resource "azurerm_container_group" "maces" {
       PYTHONUNBUFFERED          = "1"
       RIVA_FUNCTION_ID          = "b702f636-f60c-4a3d-a6f4-f3568c13bd7d"
       RIVA_COMMAND_TIMEOUT      = "120"
-      KB_SERVICE_URL            = "http://localhost:8003"
+      LANGCHAIN_TRACING_V2      = "true"
+      LANGCHAIN_PROJECT         = "maces-multi-agent"
     }
 
     secure_environment_variables = {
@@ -103,7 +108,7 @@ resource "azurerm_container_group" "maces" {
     ]
   }
 
-  # Container 3: Knowledge Base Search (Your bottleneck)
+  # Container 3: Knowledge Base Search
   container {
     name   = "kb-processor"
     image  = "mariaboukhelfa2025/maces:latest"
@@ -120,6 +125,7 @@ resource "azurerm_container_group" "maces" {
       PYTHONUNBUFFERED          = "1"
       LANGCHAIN_TRACING_V2      = "true"
       LANGCHAIN_PROJECT         = "maces-multi-agent"
+      MISTRAL_API_KEY           = var.mistral_api_key
     }
 
     commands = [
@@ -159,7 +165,7 @@ resource "azurerm_container_group" "maces" {
 
   tags = {
     project = "MACES"
-    env     = "parallel-processing"
+    env     = "microservices"
   }
 }
 
@@ -173,29 +179,48 @@ output "fqdn" {
   description = "Fully Qualified Domain Name"
 }
 
+output "ip_address" {
+  value       = azurerm_container_group.maces.ip_address
+  description = "Public IP address"
+}
+
 output "deployment_summary" {
   value = <<EOF
 
 ╔═══════════════════════════════════════════════════════════╗
-║     MACES - Parallel Processing Architecture              ║
+║     MACES - Microservices Architecture                    ║
 ╠═══════════════════════════════════════════════════════════╣
-║ Total: 4 CPUs / 8 GB Memory (within student quota)        ║
+║ Total: 4 CPUs / 8 GB Memory                              ║
 ║                                                           ║
 ║ Voice Processor (Port 8001): 1.5 CPU / 3 GB               ║
 ║   → STT, Translation, TTS (Kokoro)                        ║
 ║                                                           ║
 ║ LLM Processor (Port 8002): 1 CPU / 2 GB                   ║
-║   → Security checks, NVIDIA API calls                     ║
+║   → Security, Agents, NVIDIA API                          ║
 ║                                                           ║
 ║ KB Processor (Port 8003): 1 CPU / 2 GB                    ║
-║   → Document search, embeddings, agent routing            ║
+║   → Document search, embeddings                           ║
 ║                                                           ║
 ║ API Gateway (Port 8000): 0.5 CPU / 1 GB                   ║
 ║   → WebSocket, HTTP routing                               ║
 ║                                                           ║
 ║ URL: http://${azurerm_container_group.maces.fqdn}:8000
+║ FQDN: ${azurerm_container_group.maces.fqdn}
+║ IP:   ${azurerm_container_group.maces.ip_address}
 ╚═══════════════════════════════════════════════════════════╝
 
+Check services:
+  curl http://localhost:8000/health
+
+Monitor logs:
+  az container logs -g maces-rg -n maces-app --container-name api-gateway
+  az container logs -g maces-rg -n maces-app --container-name voice-processor
+  az container logs -g maces-rg -n maces-app --container-name llm-processor
+  az container logs -g maces-rg -n maces-app --container-name kb-processor
+
+Destroy:
+  terraform destroy
+
 EOF
-  description = "Deployment summary"
+  description = "Complete deployment summary"
 }
