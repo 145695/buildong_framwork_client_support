@@ -1,6 +1,5 @@
 """
 Voice Service - Handles STT, Translation, and TTS independently.
-Runs on its own CPU so audio processing never blocks KB/LLM.
 """
 import os
 import io
@@ -24,7 +23,6 @@ RIVA_FUNCTION_ID = os.getenv("RIVA_FUNCTION_ID", "b702f636-f60c-4a3d-a6f4-f3568c
 
 app = FastAPI(title="MACES Voice Service")
 
-# Load models at startup
 ml_models: dict[str, object] = {}
 
 
@@ -36,9 +34,8 @@ async def startup():
     if LOAD_VOICE_MODELS:
         print("[Voice Service] Loading voice models...")
         
-        # STT
         ml_models["stt_whisper"] = "nvidia_riva_grpc"
-        print("[Voice Service] STT: NVIDIA Riva gRPC (whisper-large-v3)")
+        print("[Voice Service] STT: NVIDIA Riva gRPC")
         
         # Kokoro EN
         try:
@@ -58,7 +55,7 @@ async def startup():
             print(f"[Voice Service] Kokoro FR failed: {e}")
             ml_models["tts_kokoro_fr"] = None
         
-        # Habibi-TTS (Arabic)
+        # Habibi-TTS
         try:
             from f5_tts.api import F5TTS
             ml_models["tts_habibi"] = F5TTS()
@@ -71,17 +68,10 @@ async def startup():
 
 
 def validate_language(detected_language: str) -> str:
-    """Validate and normalize detected language"""
     SUPPORTED = ["ar", "fr", "en"]
     if detected_language in SUPPORTED:
         return detected_language
-    return "ar"  # Default to Arabic
-
-
-class STTResponse(BaseModel):
-    transcription: str
-    detected_language: str
-    model: str = "whisper-large-v3-nvidia-riva"
+    return "ar"
 
 
 class TranslateRequest(BaseModel):
@@ -90,21 +80,9 @@ class TranslateRequest(BaseModel):
     target_language: str = "en"
 
 
-class TranslateResponse(BaseModel):
-    translated_text: str
-    safety_label: str = "safe"
-
-
 class TTSRequest(BaseModel):
     text: str
     language: str = "en"
-
-
-class TTSResponse(BaseModel):
-    audio_base64: str
-    model_used: str
-    sample_rate: int
-    success: bool = True
 
 
 @app.post("/stt")
@@ -125,20 +103,19 @@ async def speech_to_text(audio: UploadFile = File(...)):
         buffer = io.BytesIO(audio_bytes)
         audio_array, sample_rate = sf.read(buffer)
         if sample_rate != 16000:
-            import librosa
-            audio_array = librosa.resample(audio_array, orig_sr=sample_rate, target_sr=16000)
-        sf.write(temp_filename, audio_array, 16000, format="WAV")
+            try:
+                import librosa
+                audio_array = librosa.resample(audio_array, orig_sr=sample_rate, target_sr=16000)
+            except:
+                pass
+        sf.write(temp_filename, audio_array, 16000 if sample_rate != 16000 else sample_rate, format="WAV")
         
-        # Clone Riva clients if needed
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        riva_clients_dir = os.path.join(project_root, "python-clients")
-        if not os.path.exists(riva_clients_dir):
-            subprocess.run(
-                ["git", "clone", "https://github.com/nvidia-riva/python-clients.git", riva_clients_dir],
-                check=True, capture_output=True
-            )
-        
+        # Riva clients are already cloned in Dockerfile - use existing path
+        riva_clients_dir = "/app/python-clients"
         transcribe_script = os.path.join(riva_clients_dir, "scripts", "asr", "transcribe_file_offline.py")
+        
+        if not os.path.exists(transcribe_script):
+            raise HTTPException(500, f"Riva script not found at {transcribe_script}")
         
         cmd = [
             sys.executable, transcribe_script,
@@ -154,13 +131,17 @@ async def speech_to_text(audio: UploadFile = File(...)):
         env['PYTHONHASHSEED'] = 'random'
         env['PYTHONIOENCODING'] = 'utf-8'
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=RIVA_COMMAND_TIMEOUT, env=env, encoding='utf-8', errors='replace')
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=RIVA_COMMAND_TIMEOUT, env=env,
+            encoding='utf-8', errors='replace'
+        )
         
         output = result.stdout.strip()
         transcription = output
-        detected_language = "unknown"
+        detected_language = "fr"
         
-        # Try to parse JSON
+        # Parse JSON output
         json_start = output.find('{')
         json_end = output.rfind('}') + 1
         if json_start != -1 and json_end > json_start:
@@ -171,23 +152,27 @@ async def speech_to_text(audio: UploadFile = File(...)):
                     alternatives = result_data['alternatives'][0]
                     transcription = alternatives.get('transcript', output)
                     language_codes = alternatives.get('languageCode', [])
-                    detected_language = language_codes[0] if language_codes else 'unknown'
-            except json.JSONDecodeError:
+                    detected_language = language_codes[0] if language_codes else 'fr'
+            except:
                 pass
         elif "Final transcript:" in output:
             transcription = output.split("Final transcript:")[-1].strip()
         
         detected_language = validate_language(detected_language)
-        print(f"[Voice] STT: '{transcription[:50]}...' [{detected_language}]")
+        print(f"[Voice] STT: '{transcription[:80]}' [{detected_language}]")
         
-        return STTResponse(
-            transcription=transcription,
-            detected_language=detected_language
-        )
+        return {
+            "transcription": transcription,
+            "detected_language": detected_language,
+            "model": "whisper-large-v3-nvidia-riva"
+        }
     
     except subprocess.TimeoutExpired:
         raise HTTPException(504, "STT timed out")
     except Exception as e:
+        print(f"[Voice] STT error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(500, f"STT failed: {str(e)}")
     finally:
         try:
@@ -207,11 +192,10 @@ async def translate_text(req: TranslateRequest):
             req.text, req.source_language, req.target_language
         )
         print(f"[Voice] Translate: {req.source_language}→{req.target_language}: '{translated[:50]}...'")
-        return TranslateResponse(translated_text=translated, safety_label=safety)
+        return {"translated_text": translated, "safety_label": safety}
     except Exception as e:
-        # Fallback: return original text
         print(f"[Voice] Translation failed, returning original: {e}")
-        return TranslateResponse(translated_text=req.text, safety_label="safe")
+        return {"translated_text": req.text, "safety_label": "safe"}
 
 
 @app.post("/tts")
@@ -223,7 +207,6 @@ async def text_to_speech(req: TTSRequest):
     
     try:
         if req.language == "ar":
-            # Try Habibi-TTS first, fallback to gTTS
             habibi = ml_models.get("tts_habibi")
             if habibi:
                 try:
@@ -231,9 +214,8 @@ async def text_to_speech(req: TTSRequest):
                     audio_data = wav
                     sample_rate = sr
                     model_used = "habibi-tts"
-                except Exception as e:
-                    print(f"[Voice] Habibi failed: {e}, trying gTTS")
-                    habibi = None
+                except:
+                    pass
             
             if audio_data is None:
                 from gtts import gTTS
@@ -264,9 +246,9 @@ async def text_to_speech(req: TTSRequest):
                 audio_data, sample_rate = sf.read(buf)
                 if len(audio_data.shape) > 1:
                     audio_data = audio_data[:, 0]
-                model_used = "gTTS (French fallback)"
+                model_used = "gTTS (French)"
         
-        else:  # English
+        else:
             kokoro = ml_models.get("tts_kokoro_en")
             if kokoro:
                 generator = kokoro(req.text, voice="af_heart")
@@ -284,12 +266,11 @@ async def text_to_speech(req: TTSRequest):
                 audio_data, sample_rate = sf.read(buf)
                 if len(audio_data.shape) > 1:
                     audio_data = audio_data[:, 0]
-                model_used = "gTTS (English fallback)"
+                model_used = "gTTS (English)"
         
         if audio_data is None:
             raise HTTPException(500, "No TTS model available")
         
-        # Convert to base64
         buf = io.BytesIO()
         sf.write(buf, audio_data, sample_rate, format="WAV")
         buf.seek(0)
@@ -297,19 +278,17 @@ async def text_to_speech(req: TTSRequest):
         
         print(f"[Voice] TTS: {req.language} using {model_used}")
         
-        return TTSResponse(
-            audio_base64=f"data:audio/wav;base64,{audio_base64}",
-            model_used=model_used,
-            sample_rate=sample_rate,
-            success=True
-        )
+        return {
+            "audio_base64": f"data:audio/wav;base64,{audio_base64}",
+            "model_used": model_used,
+            "sample_rate": sample_rate,
+            "success": True
+        }
     
     except HTTPException:
         raise
     except Exception as e:
         print(f"[Voice] TTS error: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(500, f"TTS failed: {str(e)}")
 
 
