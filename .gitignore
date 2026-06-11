@@ -18,3 +18,8 @@ policies/
 
 # Embedded git repository
 python-clients/
+
+terraform.tfvars
+.terraform/
+*.tfstate
+*.tfstate.backup

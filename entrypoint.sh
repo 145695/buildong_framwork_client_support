@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Starting BNA Client Support System..."
+echo "Starting  Client Support System..."
 
 # Check for required API keys
 REQUIRED_KEYS=(
