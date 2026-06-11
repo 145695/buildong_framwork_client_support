@@ -1,6 +1,6 @@
 """
 API Gateway - Routes between services and handles WebSocket connections.
-Lightweight container that coordinates the other 3 services.
+All audio/VAD processing is delegated to voice-service.
 """
 import os
 import json
@@ -15,18 +15,17 @@ from typing import Optional
 
 app = FastAPI(title="MACES API Gateway")
 
-# Service URLs (containers communicate via localhost)
+# Service URLs
 VOICE_SERVICE = os.getenv("VOICE_SERVICE_URL", "http://localhost:8001")
 LLM_SERVICE = os.getenv("LLM_SERVICE_URL", "http://localhost:8002")
 KB_SERVICE = os.getenv("KB_SERVICE_URL", "http://localhost:8003")
 
-# HTTP client with connection pooling
+# HTTP client
 client = httpx.AsyncClient(
     limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
     timeout=httpx.Timeout(120.0)
 )
 
-# Add CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,7 +40,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/")
 async def index():
-    """Serve landing page"""
     html_path = os.path.join(os.path.dirname(__file__), "templates", "index.html")
     with open(html_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
@@ -49,7 +47,6 @@ async def index():
 
 @app.get("/call")
 async def call_page():
-    """Serve call interface"""
     html_path = os.path.join(os.path.dirname(__file__), "templates", "voice_lab_complete.html")
     with open(html_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
@@ -57,7 +54,6 @@ async def call_page():
 
 @app.post("/session/create")
 async def create_session():
-    """Create new session"""
     from app.layer2.shared.session_manager import create_session
     session_id = create_session()
     return {"session_id": session_id}
@@ -65,19 +61,20 @@ async def create_session():
 
 @app.websocket("/ws/audio/{session_id}")
 async def websocket_audio(websocket: WebSocket, session_id: str):
-    """WebSocket endpoint - coordinates between services"""
+    """WebSocket endpoint - delegates all processing to microservices"""
     from app.layer2.shared.session_manager import session_manager
-    from app.layer1.audio_processor import AudioProcessor
-    from app.layer1.vad_engine import VADEngine
     
     if session_id not in session_manager.sessions:
         await websocket.close(code=1008)
         return
     
     await websocket.accept()
-    processor = AudioProcessor(vad_engine=VADEngine())
-    session_manager.update_audio_state(session_id, "RECORDING")
-    await websocket.send_json({"type": "status", "state": "RECORDING"})
+    
+    # Audio buffer
+    audio_buffer = io.BytesIO()
+    is_recording = False
+    
+    await websocket.send_json({"type": "status", "state": "READY"})
     
     try:
         while True:
@@ -86,12 +83,15 @@ async def websocket_audio(websocket: WebSocket, session_id: str):
             if msg.get('type') == 'websocket.disconnect':
                 break
             
-            # Handle binary audio
+            # Binary audio - accumulate
             if isinstance(msg.get('bytes'), (bytes, bytearray)):
-                processor.process_frame(msg.get('bytes'))
+                if not is_recording:
+                    is_recording = True
+                    await websocket.send_json({"type": "status", "state": "RECORDING"})
+                audio_buffer.write(msg.get('bytes'))
                 continue
             
-            # Handle JSON control messages
+            # JSON control messages
             if isinstance(msg.get('text'), str):
                 try:
                     data = json.loads(msg.get('text'))
@@ -99,50 +99,38 @@ async def websocket_audio(websocket: WebSocket, session_id: str):
                     continue
                 
                 if data.get('type') == 'end_of_speech':
-                    session_manager.update_audio_state(session_id, "PROCESSING")
                     await websocket.send_json({"type": "status", "state": "PROCESSING"})
                     
-                    audio_data = processor.get_accumulated_audio()
+                    audio_buffer.seek(0)
+                    audio_data = audio_buffer.read()
+                    audio_buffer = io.BytesIO()  # Reset
+                    is_recording = False
                     
-                    if len(audio_data) == 0:
+                    if len(audio_data) < 1000:
                         await websocket.send_json({"type": "error", "message": "No speech detected"})
-                        processor.reset()
+                        await websocket.send_json({"type": "status", "state": "READY"})
                         continue
                     
-                    # Convert to WAV
-                    import wave
-                    pcm_bytes = audio_data.tobytes()
-                    wav_buffer = io.BytesIO()
-                    with wave.open(wav_buffer, 'wb') as wav_file:
-                        wav_file.setnchannels(1)
-                        wav_file.setsampwidth(2)
-                        wav_file.setframerate(16000)
-                        wav_file.writeframes(pcm_bytes)
-                    wav_buffer.seek(0)
-                    
-                    # NOW CALL SERVICES IN PARALLEL!
                     try:
-                        # Send audio to voice service for STT
-                        voice_response = await client.post(
+                        # STEP 1: Send audio to Voice Service for STT
+                        stt_resp = await client.post(
                             f"{VOICE_SERVICE}/stt",
-                            files={"audio": ("audio.wav", wav_buffer.read(), "audio/wav")}
+                            files={"audio": ("audio.webm", audio_data, "audio/webm")}
                         )
-                        stt_result = voice_response.json()
+                        stt = stt_resp.json()
+                        transcription = stt.get("transcription", "")
+                        detected_language = stt.get("detected_language", "fr")
                         
-                        transcription = stt_result.get("transcription", "")
-                        detected_language = stt_result.get("detected_language", "fr")
-                        
-                        # Send status
                         await websocket.send_json({
                             "type": "status_update",
-                            "stage": "stt_complete",
-                            "message": f"Transcribed: {transcription}",
+                            "stage": "stt",
+                            "message": f"Transcription: {transcription}",
                             "language": detected_language
                         })
                         
-                        # Translate if needed (voice service)
-                        if detected_language != "en":
-                            translate_response = await client.post(
+                        # STEP 2: Translate if needed (via Voice Service)
+                        if detected_language != "en" and detected_language != "unknown":
+                            trans_resp = await client.post(
                                 f"{VOICE_SERVICE}/translate",
                                 json={
                                     "text": transcription,
@@ -150,12 +138,19 @@ async def websocket_audio(websocket: WebSocket, session_id: str):
                                     "target_language": "en"
                                 }
                             )
-                            translated = translate_response.json()
-                            text_for_processing = translated.get("translated_text", transcription)
+                            trans = trans_resp.json()
+                            text_for_processing = trans.get("translated_text", transcription)
                         else:
                             text_for_processing = transcription
                         
-                        # SECURITY CHECK + KB SEARCH + LLM PROCESSING - ALL IN PARALLEL!
+                        await websocket.send_json({
+                            "type": "status_update",
+                            "stage": "translate",
+                            "message": "Translation complete",
+                            "language": detected_language
+                        })
+                        
+                        # STEP 3: Security Check + KB Search IN PARALLEL
                         security_task = client.post(
                             f"{LLM_SERVICE}/security/check",
                             json={"text": text_for_processing}
@@ -165,21 +160,27 @@ async def websocket_audio(websocket: WebSocket, session_id: str):
                             json={"query": transcription, "language": detected_language}
                         )
                         
-                        # Wait for both
                         security_resp, kb_resp = await asyncio.gather(security_task, kb_task)
-                        
                         security = security_resp.json()
                         kb = kb_resp.json()
                         
+                        if not security.get("is_safe", True):
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": security.get("reason", "Content blocked by security")
+                            })
+                            await websocket.send_json({"type": "status", "state": "READY"})
+                            continue
+                        
                         await websocket.send_json({
                             "type": "status_update",
-                            "stage": "kb_complete",
-                            "message": f"KB found: {kb.get('documents_found', 0)} documents",
+                            "stage": "kb",
+                            "message": f"Found {kb.get('documents_found', 0)} documents",
                             "language": detected_language
                         })
                         
-                        # Process with agent
-                        agent_response = await client.post(
+                        # STEP 4: Process with LLM Agent
+                        agent_resp = await client.post(
                             f"{LLM_SERVICE}/agent/process",
                             json={
                                 "message": text_for_processing,
@@ -187,17 +188,24 @@ async def websocket_audio(websocket: WebSocket, session_id: str):
                                 "session_id": session_id
                             }
                         )
-                        agent_result = agent_response.json()
+                        agent = agent_resp.json()
                         
-                        # Generate TTS for response
-                        tts_response = await client.post(
+                        await websocket.send_json({
+                            "type": "status_update",
+                            "stage": "agent",
+                            "message": "Generating response...",
+                            "language": detected_language
+                        })
+                        
+                        # STEP 5: Generate TTS
+                        tts_resp = await client.post(
                             f"{VOICE_SERVICE}/tts",
                             json={
-                                "text": agent_result.get("response", ""),
+                                "text": agent.get("response", "I'm sorry, I couldn't process that."),
                                 "language": detected_language
                             }
                         )
-                        tts_result = tts_response.json()
+                        tts = tts_resp.json()
                         
                         # Send final result
                         await websocket.send_json({
@@ -207,47 +215,32 @@ async def websocket_audio(websocket: WebSocket, session_id: str):
                                 "transcription": transcription,
                                 "detected_language": detected_language,
                                 "kb_answer": kb.get("answer", ""),
-                                "agent_response": agent_result.get("response", ""),
-                                "final_response_audio": tts_result.get("audio_base64", ""),
-                                "audio_model_used": tts_result.get("model_used", ""),
+                                "agent_response": agent.get("response", ""),
+                                "final_response_audio": tts.get("audio_base64", ""),
+                                "audio_model_used": tts.get("model_used", ""),
                             }
                         })
                         
                     except Exception as e:
+                        import traceback
+                        traceback.print_exc()
                         await websocket.send_json({"type": "error", "message": str(e)})
                     
-                    processor.reset()
-                    session_manager.update_audio_state(session_id, "RECORDING")
-                    await websocket.send_json({"type": "status", "state": "RECORDING"})
+                    await websocket.send_json({"type": "status", "state": "READY"})
     
     except WebSocketDisconnect:
         pass
-    finally:
-        session_manager.update_audio_state(session_id, "IDLE")
 
 
 @app.get("/health")
 async def health():
-    """Check health of all services"""
     services = {}
-    try:
-        resp = await client.get(f"{VOICE_SERVICE}/health")
-        services["voice"] = "healthy" if resp.status_code == 200 else "unhealthy"
-    except:
-        services["voice"] = "unavailable"
-    
-    try:
-        resp = await client.get(f"{LLM_SERVICE}/health")
-        services["llm"] = "healthy" if resp.status_code == 200 else "unhealthy"
-    except:
-        services["llm"] = "unavailable"
-    
-    try:
-        resp = await client.get(f"{KB_SERVICE}/health")
-        services["kb"] = "healthy" if resp.status_code == 200 else "unhealthy"
-    except:
-        services["kb"] = "unavailable"
-    
+    for name, url in [("voice", VOICE_SERVICE), ("llm", LLM_SERVICE), ("kb", KB_SERVICE)]:
+        try:
+            resp = await client.get(f"{url}/health", timeout=5)
+            services[name] = "healthy" if resp.status_code == 200 else "unhealthy"
+        except:
+            services[name] = "unavailable"
     return {"status": "healthy", "service": "api-gateway", "services": services}
 
 
