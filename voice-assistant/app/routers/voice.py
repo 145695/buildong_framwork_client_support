@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 router = APIRouter(prefix="/test", tags=["Layer Tests"])
-
+LOAN_AGENT_URL = os.getenv("LOAN_AGENT_URL", "http://localhost:5001/maces_interface.html")
 
 def validate_language(detected_language: str) -> str:
     """Validate and normalize detected language to supported languages"""
@@ -745,7 +745,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             # Client-side should navigate to this URL (placeholder; user can change later)
             return {
                 "action": "redirect",
-                "url": "https://PLACEHOLDER-LOAN-URL.example/eligibility"
+                "url": LOAN_AGENT_URL
             }
         elif any(word in t_lower for word in ["non", "no", "لا"]):
             return {
@@ -934,7 +934,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                     agent_routed_to="eligibility_handler",
                     agent_response="[Redirecting to eligibility test]",
                     routing_reason="Eligibility yes detected",
-                    metadata={"redirect_url": "https://bna-loan-eligibility-test.com"}
+                    metadata={"redirect_url": LOAN_AGENT_URL}
                 )
                 add_turn_record(session_id, turn)
                 
