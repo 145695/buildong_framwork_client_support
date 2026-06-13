@@ -38,13 +38,17 @@ jobs:
             mariaboukhelfa2025/maces:voice-assistant-latest
 
   build-loan:
+    needs: build-voice
     if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'loan-only' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          token: ${{ secrets.GH_TOKEN }}   # ← ADD THIS LINE
+      - name: Checkout Main Repo
+        uses: actions/checkout@v4
+      
+      - name: Checkout Loan Agent Submodule
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive loan-agent
       
       - name: Login to Docker Hub
         uses: docker/login-action@v3
