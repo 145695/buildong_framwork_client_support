@@ -665,31 +665,27 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             if result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
                 print(f"[STT] Riva client error: stdout={result.stdout!r} stderr={result.stderr!r}")
 
+                # Try Riva fallback function first
                 degraded_failure = "degraded" in stderr_lower or "degraded" in stdout_lower or "invalidargument" in stderr_lower or "invalidargument" in stdout_lower
+                riva_fallback_tried = False
                 if degraded_failure and RIVA_FALLBACK_FUNCTION_ID and RIVA_FALLBACK_FUNCTION_ID != RIVA_FUNCTION_ID:
                     cmd[7] = RIVA_FALLBACK_FUNCTION_ID
                     try:
-                        result = subprocess.run(
-                            cmd,
-                            capture_output=True,
-                            text=True,
-                            timeout=RIVA_COMMAND_TIMEOUT,
-                            env=env,
-                            encoding='utf-8',
-                            errors='replace'
-                        )
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=RIVA_COMMAND_TIMEOUT, env=env, encoding='utf-8', errors='replace')
                         stderr_lower = (result.stderr or "").lower()
                         stdout_lower = (result.stdout or "").lower()
-                    except subprocess.TimeoutExpired as timeout_exc:
-                        raise HTTPException(504, f"NVIDIA Riva STT command timed out after {RIVA_COMMAND_TIMEOUT} seconds") from timeout_exc
+                        riva_fallback_tried = True
+                    except subprocess.TimeoutExpired:
+                        pass
 
+                # If Riva (or its fallback) failed, try local Whisper
+                if not riva_fallback_tried or result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
                     print(f"[STT] Riva failed, trying local Whisper fallback...")
                     try:
                         fallback = transcribe_with_local_whisper(temp_filename)
                         transcription = fallback["transcription"]
                         detected_language = fallback["detected_language"]
                         print(f"  [STT]       → \"{transcription}\"  [{detected_language}] (local fallback)")
-                        # Skip the return, continue with fallback result
                     except Exception as whisper_error:
                         print(f"[STT] Local Whisper also failed: {whisper_error}")
                         return {
@@ -697,8 +693,6 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                             "error": "STT service unavailable. Please try again.",
                             "stage": "whisper_stt"
                         }
-            
-            # Parse the JSON output from Riva client
             try:
                 output = result.stdout.strip()
                 json_start = output.find('{')
