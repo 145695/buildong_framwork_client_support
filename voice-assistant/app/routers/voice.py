@@ -17,11 +17,11 @@ RIVA_FALLBACK_FUNCTION_ID = os.getenv("RIVA_FALLBACK_FUNCTION_ID")
 
 logger = logging.getLogger(__name__)
 try:
-    import whisper
+    from faster_whisper import WhisperModel
     WHISPER_AVAILABLE = True
 except ImportError:
     WHISPER_AVAILABLE = False
-    logger.warning("openai-whisper not installed. Local fallback unavailable.")
+    logger.warning("faster-whisper not installed. Local fallback unavailable.")
 import soundfile as sf
 from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from fastapi.responses import StreamingResponse
@@ -47,15 +47,17 @@ def validate_language(detected_language: str) -> str:
     return "ar"
 
 def transcribe_with_local_whisper(audio_path: str) -> dict:
-    """Fallback: Use local Whisper when Riva is down"""
+    """Fallback: Use local faster-whisper when Riva is down"""
     if not WHISPER_AVAILABLE:
         raise RuntimeError("Whisper not installed")
     
-    model = whisper.load_model("base")
-    result = model.transcribe(audio_path)
+    model = WhisperModel("base", device="cpu", compute_type="int8")
+    segments, info = model.transcribe(audio_path)
+    transcription = " ".join([seg.text for seg in segments])
+    
     return {
-        "transcription": result["text"].strip(),
-        "detected_language": result.get("language", "unknown"),
+        "transcription": transcription.strip(),
+        "detected_language": info.language if info else "unknown",
         "model": "whisper-local-fallback"
     }
 @router.post("/stt", summary="Test Layer 1: Whisper STT (NVIDIA Riva gRPC)")
