@@ -84,4 +84,4 @@ tqdm==4.67.3
 loguru==0.7.3
 tenacity==8.5.0
 
-openai-whisper
+faster-whisper
