@@ -32,7 +32,7 @@ pipeline {
                 stage('Build Voice') {
                     steps {
                         dir('voice-assistant') {
-                            sh "docker build --no-cache --platform linux/amd64 -t ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} -f Dockerfile ."
+                            sh "docker build --platform linux/amd64 -t ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} -f Dockerfile ."
                         }
                     }
                 }

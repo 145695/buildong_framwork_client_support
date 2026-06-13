@@ -18,7 +18,7 @@ pipeline {
             steps {
                 script {
                     dir('voice-assistant') {
-                        sh "docker build --no-cache --platform linux/amd64 -t ${DOCKER_IMAGE}:${DOCKER_TAG} -f Dockerfile ."
+                        sh "docker build --platform linux/amd64 -t ${DOCKER_IMAGE}:${DOCKER_TAG} -f Dockerfile ."
                     }
                 }
             }
