@@ -14,7 +14,14 @@ RIVA_COMMAND_TIMEOUT = int(os.getenv("RIVA_COMMAND_TIMEOUT", "180"))
 RIVA_FUNCTION_ID = os.getenv("RIVA_FUNCTION_ID", "b702f636-f60c-4a3d-a6f4-f3568c13bd7d")
 RIVA_FALLBACK_FUNCTION_ID = os.getenv("RIVA_FALLBACK_FUNCTION_ID")
 
+
 logger = logging.getLogger(__name__)
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    logger.warning("openai-whisper not installed. Local fallback unavailable.")
 import soundfile as sf
 from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from fastapi.responses import StreamingResponse
@@ -39,7 +46,18 @@ def validate_language(detected_language: str) -> str:
     )
     return "ar"
 
-
+def transcribe_with_local_whisper(audio_path: str) -> dict:
+    """Fallback: Use local Whisper when Riva is down"""
+    if not WHISPER_AVAILABLE:
+        raise RuntimeError("Whisper not installed")
+    
+    model = whisper.load_model("base")
+    result = model.transcribe(audio_path)
+    return {
+        "transcription": result["text"].strip(),
+        "detected_language": result.get("language", "unknown"),
+        "model": "whisper-local-fallback"
+    }
 @router.post("/stt", summary="Test Layer 1: Whisper STT (NVIDIA Riva gRPC)")
 async def test_stt(audio: UploadFile = File(...)):
     from app.main import ml_models
@@ -665,13 +683,20 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                     except subprocess.TimeoutExpired as timeout_exc:
                         raise HTTPException(504, f"NVIDIA Riva STT command timed out after {RIVA_COMMAND_TIMEOUT} seconds") from timeout_exc
 
-                if result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
-                    print(f"[STT] STT Error detected from Riva response")
-                    return {
-                        "success": False,
-                        "error": "STT service unavailable. Please try again.",
-                        "stage": "whisper_stt"
-                    }
+                    print(f"[STT] Riva failed, trying local Whisper fallback...")
+                    try:
+                        fallback = transcribe_with_local_whisper(temp_filename)
+                        transcription = fallback["transcription"]
+                        detected_language = fallback["detected_language"]
+                        print(f"  [STT]       → \"{transcription}\"  [{detected_language}] (local fallback)")
+                        # Skip the return, continue with fallback result
+                    except Exception as whisper_error:
+                        print(f"[STT] Local Whisper also failed: {whisper_error}")
+                        return {
+                            "success": False,
+                            "error": "STT service unavailable. Please try again.",
+                            "stage": "whisper_stt"
+                        }
             
             # Parse the JSON output from Riva client
             try:
@@ -742,7 +767,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     if is_followup:
         t_lower = transcription.lower() if transcription else ""
         if any(word in t_lower for word in ["oui", "yes", "نعم"]):
-            # Client-side should navigate to this URL (placeholder; user can change later)
+           
             return {
                 "action": "redirect",
                 "url": LOAN_AGENT_URL
@@ -972,12 +997,12 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                     "conversation_id": str(state.conversation_id),
                     "session_id": session_id,
                     "eligibility_redirect": "yes",
-                    "redirect_url": "/static/eligibility_redirect.html"
+                    "redirect_url": LOAN_AGENT_URL
                 }
                 
                 # Add flags for WebSocket to end call and redirect
                 results["end_call"] = True
-                results["redirect_url"] = "/static/eligibility_redirect.html"
+                results["redirect_url"] = LOAN_AGENT_URL
                 
                 return results
                 
