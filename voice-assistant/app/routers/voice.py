@@ -590,6 +590,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
 
     transcription = None
     detected_language = "unknown"
+    used_fallback = False
     
     try:
         audio_bytes = await audio.read()
@@ -664,57 +665,56 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                 "grpc", "exception", "degraded", "invalidargument", "stateful"
             ]
             
-            if result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
-                print(f"[STT] Riva client error: stdout={result.stdout!r} stderr={result.stderr!r}")
+            riva_failed = result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords)
 
-                # Try Riva fallback function first
-                degraded_failure = "degraded" in stderr_lower or "degraded" in stdout_lower or "invalidargument" in stderr_lower or "invalidargument" in stdout_lower
-                riva_fallback_tried = False
-                if degraded_failure and RIVA_FALLBACK_FUNCTION_ID and RIVA_FALLBACK_FUNCTION_ID != RIVA_FUNCTION_ID:
-                    cmd[7] = RIVA_FALLBACK_FUNCTION_ID
-                    try:
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=RIVA_COMMAND_TIMEOUT, env=env, encoding='utf-8', errors='replace')
-                        stderr_lower = (result.stderr or "").lower()
-                        stdout_lower = (result.stdout or "").lower()
-                        riva_fallback_tried = True
-                    except subprocess.TimeoutExpired:
-                        pass
+            if riva_failed:
+                print(f"[STT] Riva failed, trying local Whisper fallback...")
+                try:
+                    fallback = transcribe_with_local_whisper(temp_filename)
+                    transcription = fallback["transcription"]
+                    detected_language = fallback["detected_language"]
+                    used_fallback = True
+                    print(f"  [STT]       → \"{transcription}\"  [{detected_language}] (local fallback)")
+                except Exception as whisper_error:
+                    print(f"[STT] Local Whisper also failed: {whisper_error}")
+                    return {
+                        "success": False,
+                        "error": "STT service unavailable. Please try again.",
+                        "stage": "whisper_stt"
+                    }
 
-                # If Riva (or its fallback) failed, try local Whisper
-                if not riva_fallback_tried or result.returncode != 0 or any(keyword in stderr_lower for keyword in error_keywords) or any(keyword in stdout_lower for keyword in error_keywords):
-                    print(f"[STT] Riva failed, trying local Whisper fallback...")
-                    try:
-                        fallback = transcribe_with_local_whisper(temp_filename)
-                        transcription = fallback["transcription"]
-                        detected_language = fallback["detected_language"]
-                        print(f"  [STT]       → \"{transcription}\"  [{detected_language}] (local fallback)")
-                    except Exception as whisper_error:
-                        print(f"[STT] Local Whisper also failed: {whisper_error}")
-                        return {
-                            "success": False,
-                            "error": "STT service unavailable. Please try again.",
-                            "stage": "whisper_stt"
-                        }
-            try:
-                output = result.stdout.strip()
-                json_start = output.find('{')
-                json_end = output.rfind('}') + 1
-                
-                if json_start != -1 and json_end > json_start:
-                    json_str = output[json_start:json_end]
-                    json_output = json.loads(json_str)
+            if not used_fallback:
+                try:
+                    output = result.stdout.strip()
+                    json_start = output.find('{')
+                    json_end = output.rfind('}') + 1
                     
-                    if json_output and 'results' in json_output:
-                        result_data = json_output['results'][0]
-                        alternatives = result_data['alternatives'][0]
-                        transcription = alternatives['transcript']
-                        language_codes = alternatives.get('languageCode', [])
-                        detected_language = language_codes[0] if language_codes else "unknown"
-                        print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
+                    if json_start != -1 and json_end > json_start:
+                        json_str = output[json_start:json_end]
+                        json_output = json.loads(json_str)
+                        
+                        if json_output and 'results' in json_output:
+                            result_data = json_output['results'][0]
+                            alternatives = result_data['alternatives'][0]
+                            transcription = alternatives['transcript']
+                            language_codes = alternatives.get('languageCode', [])
+                            detected_language = language_codes[0] if language_codes else "unknown"
+                            print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
+                        else:
+                            transcription = output
+                            detected_language = "unknown"
                     else:
-                        transcription = output
-                        detected_language = "unknown"
-                else:
+                        if "Final transcript:" in output:
+                            transcription = output.split("Final transcript:")[-1].strip()
+                            detected_language = "unknown"
+                            print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
+                        else:
+                            transcription = output
+                            detected_language = "unknown"
+                            print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
+                    
+                except json.JSONDecodeError as e:
+                    output = result.stdout.strip()
                     if "Final transcript:" in output:
                         transcription = output.split("Final transcript:")[-1].strip()
                         detected_language = "unknown"
@@ -723,17 +723,6 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
                         transcription = output
                         detected_language = "unknown"
                         print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
-                
-            except json.JSONDecodeError as e:
-                output = result.stdout.strip()
-                if "Final transcript:" in output:
-                    transcription = output.split("Final transcript:")[-1].strip()
-                    detected_language = "unknown"
-                    print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
-                else:
-                    transcription = output
-                    detected_language = "unknown"
-                    print(f"  [STT]       → \"{transcription}\"  [{detected_language}]")
             
         finally:
             try:
@@ -745,7 +734,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         # Store STT results
         results["stages"]["whisper_stt"] = {
             "success": True,
-            "model": "whisper-large-v3-nvidia-riva",
+            "model": "whisper-local-fallback" if used_fallback else "whisper-large-v3-nvidia-riva",
             "detected_language": detected_language,
             "transcription": transcription,
             "processing_time": "N/A"
