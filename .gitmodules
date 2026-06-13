@@ -1,0 +1,3 @@
+[submodule "loan-agent"]
+	path = loan-agent
+	url = https://github.com/krd-ines/maces_loan_agent.git

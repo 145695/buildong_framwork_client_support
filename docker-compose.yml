@@ -1,19 +1,47 @@
 version: '3.8'
 
 services:
-  app:
-    build: .
+  # Voice Assistant (BNA Client Support)
+  voice-assistant:
+    build:
+      context: ./voice-assistant
+      dockerfile: Dockerfile
+    image: mariabboukhelfa2025/maces:voice-assistant-latest
     container_name: bna-client-support
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ./voice-assistant/.env
+    environment:
+      - LOAN_AGENT_URL=http://loan-agent:5000/maces_interface.html
     volumes:
-      # Runtime write directories from audit
-      - ./outputs:/app/outputs
-      - ./knowledgebase/vector_cache:/app/knowledgebase/vector_cache
-      - ./chroma_db:/app/chroma_db
-      - ./.uploads:/app/.uploads
-      # System temp directory for temporary audio files
+      - ./voice-assistant/outputs:/app/outputs
+      - ./voice-assistant/knowledgebase/vector_cache:/app/knowledgebase/vector_cache
+      - ./voice-assistant/chroma_db:/app/chroma_db
+      - ./voice-assistant/.uploads:/app/.uploads
       - /tmp:/tmp
+    networks:
+      - maces-network
     restart: unless-stopped
+
+  # Loan Agent (MACES)
+  loan-agent:
+    build:
+      context: ./loan-agent
+      dockerfile: Dockerfile
+    image: mariabboukhelfa2025/maces:loan-agent-latest
+    container_name: maces-loan-agent
+    ports:
+      - "5000:5000"
+    environment:
+      - PROCEED_URL=http://voice-assistant:8000/maces_interface.html
+      - RETURN_URL=http://voice-assistant:8000/
+    networks:
+      - maces-network
+    depends_on:
+      - voice-assistant
+    restart: unless-stopped
+
+networks:
+  maces-network:
+    driver: bridge

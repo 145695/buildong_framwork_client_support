@@ -39,7 +39,7 @@ resource "azurerm_container_group" "maces" {
     name   = "maces"
     image  = "mariaboukhelfa2025/maces:latest"
     cpu    = "2"
-    memory = "4"
+    memory = "8"
 
     ports {
       port     = 8000
