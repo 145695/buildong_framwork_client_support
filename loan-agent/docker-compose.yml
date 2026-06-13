@@ -1,0 +1,9 @@
+services:
+  app-a:
+    build: .
+    image: maces-loan-agent
+    ports:
+      - "5000:5000"
+    environment:
+      - PROCEED_URL=${PROCEED_URL:-http://localhost:5002/maces_interface.html}
+      - RETURN_URL=${RETURN_URL:-http://localhost:5000/}   # voice assistant url
