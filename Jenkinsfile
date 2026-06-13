@@ -31,14 +31,14 @@ pipeline {
                 stage('Build Voice') {
                     steps {
                         dir('voice-assistant') {
-                            sh "docker build --platform linux/amd64 -t ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} -f Dockerfile ."
+                            sh "docker build --no-cache --platform linux/amd64 -t ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} -f Dockerfile ."
                         }
                     }
                 }
                 stage('Build Loan') {
                     steps {
                         dir('loan-agent') {
-                            sh "docker build -t ${DOCKER_IMAGE}:loan-agent-${BUILD_NUM} -f Dockerfile ."
+                            sh "docker build --no-cache -t ${DOCKER_IMAGE}:loan-agent-${BUILD_NUM} -f Dockerfile ."
                         }
                     }
                 }
@@ -47,26 +47,22 @@ pipeline {
         
         stage('Push All') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_TOKEN')]) {
-                    sh """
-                        echo "${DOCKER_TOKEN}" | docker login -u "${DOCKER_USER}" --password-stdin
+                script {
+                    docker.withRegistry("https://index.docker.io/v1/", 'docker-hub-credentials') {
+                        // Push Voice
+                        def vaImage = docker.image("${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM}")
+                        vaImage.push()
+                        vaImage.push('voice-assistant-latest')
                         
-                        # Push Voice
-                        docker tag ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} ${DOCKER_IMAGE}:voice-assistant-latest
-                        docker push ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM}
-                        docker push ${DOCKER_IMAGE}:voice-assistant-latest
+                        // Push Loan
+                        def laImage = docker.image("${DOCKER_IMAGE}:loan-agent-${BUILD_NUM}")
+                        laImage.push()
+                        laImage.push('loan-agent-latest')
                         
-                        # Push Loan
-                        docker tag ${DOCKER_IMAGE}:loan-agent-${BUILD_NUM} ${DOCKER_IMAGE}:loan-agent-latest
-                        docker push ${DOCKER_IMAGE}:loan-agent-${BUILD_NUM}
-                        docker push ${DOCKER_IMAGE}:loan-agent-latest
-                        
-                        # Push Combined tag
-                        docker tag ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} ${DOCKER_IMAGE}:combined-${BUILD_NUM}
-                        docker push ${DOCKER_IMAGE}:combined-${BUILD_NUM}
-                        
-                        docker logout
-                    """
+                        // Push Combined tag
+                        def combinedImage = docker.image("${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM}")
+                        combinedImage.push("combined-${BUILD_NUM}")
+                    }
                 }
             }
         }
@@ -74,11 +70,14 @@ pipeline {
         stage('Deploy Together') {
             steps {
                 sh """
-                    docker rm -f bna-client-support maces-loan-agent || true
+                    docker network create maces-net 2>/dev/null || true
+                    
+                    docker rm -f bna-client-support maces-loan-agent 2>/dev/null || true
                     
                     docker run -d -p 8000:8000 \
                         --name bna-client-support \
                         --network maces-net \
+                        --platform linux/amd64 \
                         ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM}
                     
                     docker run -d -p 5000:5000 \
@@ -87,6 +86,13 @@ pipeline {
                         -e PROCEED_URL=http://bna-client-support:8000/maces_interface.html \
                         -e RETURN_URL=http://bna-client-support:8000/ \
                         ${DOCKER_IMAGE}:loan-agent-${BUILD_NUM}
+                    
+                    echo "⏳ Waiting for services to start..."
+                    sleep 10
+                    
+                    echo "🏥 Health checks:"
+                    curl -f http://localhost:8000/ && echo "✅ Voice Assistant OK" || echo "❌ Voice Assistant failed"
+                    curl -f http://localhost:5000/ && echo "✅ Loan Agent OK" || echo "❌ Loan Agent failed"
                 """
             }
         }
@@ -95,13 +101,28 @@ pipeline {
     post {
         success {
             echo """
-            ✅ Combined deployment successful!
-            Voice: http://localhost:8000
-            Loan: http://localhost:5000
+            ╔══════════════════════════════════════════╗
+            ║     ✅ COMBINED DEPLOYMENT SUCCESSFUL   ║
+            ║     Build: #${BUILD_NUM}                          ║
+            ╠══════════════════════════════════════════╣
+            ║  Voice Assistant: http://localhost:8000 ║
+            ║  Loan Agent:      http://localhost:5000 ║
+            ║                                        ║
+            ║  Images pushed:                         ║
+            ║  • voice-assistant-${BUILD_NUM}                  ║
+            ║  • voice-assistant-latest               ║
+            ║  • loan-agent-${BUILD_NUM}                       ║
+            ║  • loan-agent-latest                    ║
+            ║  • combined-${BUILD_NUM}                         ║
+            ╚══════════════════════════════════════════╝
             """
         }
         failure {
-            echo "❌ Combined build failed"
+            echo "❌ Combined build failed! Check the logs above."
+        }
+        always {
+            echo '🧹 Pipeline finished.'
+            cleanWs()
         }
     }
 }
