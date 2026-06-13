@@ -34,8 +34,8 @@ jobs:
           context: ./voice-assistant
           push: true
           tags: |
-            mariabboukhelfa2025/maces:voice-assistant-${{ github.run_number }}
-            mariabboukhelfa2025/maces:voice-assistant-latest
+            mariaboukhelfa2025/maces:voice-assistant-${{ github.run_number }}
+            mariaboukhelfa2025/maces:voice-assistant-latest
 
   build-loan:
     if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'loan-only' || github.event_name == 'push' }}
@@ -57,5 +57,5 @@ jobs:
           context: ./loan-agent
           push: true
           tags: |
-            mariabboukhelfa2025/maces:loan-agent-${{ github.run_number }}
-            mariabboukhelfa2025/maces:loan-agent-latest
+            mariaboukhelfa2025/maces:loan-agent-${{ github.run_number }}
+            mariaboukhelfa2025/maces:loan-agent-latest
