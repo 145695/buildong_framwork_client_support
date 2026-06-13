@@ -1,0 +1,14 @@
+# Create the file
+mkdir .github\workflows
+notepad .github\workflows\build.yml
+# Paste the yaml above
+
+# Add secrets on GitHub:
+# Settings → Secrets and variables → Actions → New repository secret
+# DOCKER_USERNAME = mariabboukhelfa2025
+# DOCKER_TOKEN = your_token
+
+# Push
+git add .github
+git commit -m "Added GitHub Actions - builds on push, no more PC crashes!"
+git push origin final

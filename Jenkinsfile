@@ -32,14 +32,14 @@ pipeline {
                 stage('Build Voice') {
                     steps {
                         dir('voice-assistant') {
-                            sh "docker build --platform linux/amd64 -t ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} -f Dockerfile ."
+                            sh "docker build --memory=4g --platform linux/amd64 -t ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM} -f Dockerfile ."
                         }
                     }
                 }
                 stage('Build Loan') {
                     steps {
                         dir('loan-agent') {
-                            sh "docker build --no-cache -t ${DOCKER_IMAGE}:loan-agent-${BUILD_NUM} -f Dockerfile ."
+                            sh "docker build --memory=2g -t ${DOCKER_IMAGE}:loan-agent-${BUILD_NUM} -f Dockerfile ."
                         }
                     }
                 }
@@ -76,12 +76,16 @@ pipeline {
                     docker rm -f bna-client-support maces-loan-agent 2>/dev/null || true
                     
                     docker run -d -p 8000:8000 \
+                        --memory=4g \
+                        --cpus=2 \
                         --name bna-client-support \
                         --network maces-net \
                         --platform linux/amd64 \
                         ${DOCKER_IMAGE}:voice-assistant-${BUILD_NUM}
                     
                     docker run -d -p 5000:5000 \
+                        --memory=2g \
+                        --cpus=1 \
                         --name maces-loan-agent \
                         --network maces-net \
                         -e PROCEED_URL=http://bna-client-support:8000/maces_interface.html \
