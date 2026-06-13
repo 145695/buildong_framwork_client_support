@@ -2,6 +2,7 @@ pipeline {
     agent any
     
     environment {
+        DOCKER_BUILDKIT = '0' 
         DOCKER_IMAGE = "mariabboukhelfa2025/maces"
         BUILD_NUM = "${BUILD_NUMBER}"
     }
