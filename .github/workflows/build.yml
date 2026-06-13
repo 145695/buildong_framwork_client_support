@@ -38,7 +38,6 @@ jobs:
             mariaboukhelfa2025/maces:voice-assistant-latest
 
   build-loan:
-    needs: build-voice
     if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'loan-only' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
