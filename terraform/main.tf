@@ -49,7 +49,7 @@ resource "azurerm_container_group" "voice_assistant" {
   container {
     name   = "voice-assistant"
     image  = "mariaboukhelfa2025/maces:voice-assistant-latest"
-    cpu    = "2"
+    cpu    = "4"
     memory = "16"
 
     ports {
