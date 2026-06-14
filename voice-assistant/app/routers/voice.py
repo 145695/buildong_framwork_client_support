@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 router = APIRouter(prefix="/test", tags=["Layer Tests"])
-LOAN_AGENT_URL = os.getenv("LOAN_AGENT_URL", "http://localhost:5001/maces_interface.html")
+LOAN_AGENT_URL = os.getenv("LOAN_AGENT_URL", "http://localhost:5000")
 
 def validate_language(detected_language: str) -> str:
     """Validate and normalize detected language to supported languages"""
