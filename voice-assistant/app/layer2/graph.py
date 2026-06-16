@@ -33,14 +33,16 @@ def knowledge_base_node(state: ConversationState) -> ConversationState:
     import asyncio
     import concurrent.futures
     
+    print("  [KB SEARCH]  → Searching (Inside LangGraph)...")
+    
     # Get RAG system singleton and process question
     def run_async_tasks():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             rag = loop.run_until_complete(get_rag_system())
-            # Use reconstructed_query if available, fallback to normalized_text_en
-            query = getattr(state, "reconstructed_query", None) or state.normalized_text_en or state.original_text or ""
+            # Use text_for_kb (French) if available, else reconstructed_query, fallback to normalized_text_en
+            query = state.retrieval_context.get("text_for_kb") or getattr(state, "reconstructed_query", None) or state.normalized_text_en or state.original_text or ""
             result = loop.run_until_complete(rag.ask_question(query))
             return result
         finally:
@@ -122,26 +124,20 @@ def _run_with_langgraph(state: ConversationState) -> ConversationState:
     graph.add_node("knowledge_base", knowledge_base_node)
     # Remove old loan nodes - will add new ones below
     
-    def choose_after_start(current: ConversationState) -> str:
+    def choose_after_knowledge_base(current: ConversationState) -> str:
         # Check if we're waiting for eligibility test answer
         eligibility_test_asked = current.orchestrator_context.get("eligibility_test_asked", False)
         
         if eligibility_test_asked:
             return "loan_agent"
         
-        # Check if loan eligibility test
+        # Check if loan intent
         loan_intents = ["check_loan_eligibility", "apply_for_loan", "loan_status", "apply_for_mortgage", "check_mortgage_payments"]
         
         if current.intent in loan_intents:
-            # Route loan intents directly to loan agent, skip knowledge_base
             return "loan_agent"
         else:
-            # Non-loan queries go through knowledge_base first
-            return "knowledge_base"
-
-    # Route from knowledge_base to client_support (no loan here anymore, they go directly to loan_agent)
-    def choose_after_knowledge_base(current: ConversationState) -> str:
-        return "client_support"
+            return "client_support"
 
     # Route from loan to client_support only if needed
     def choose_after_loan(current: ConversationState) -> str:
@@ -166,17 +162,11 @@ def _run_with_langgraph(state: ConversationState) -> ConversationState:
     graph.add_node("loan_agent", loan_agent_node)
     graph.add_node("client_support", client_support_node)
 
-    # Updated graph edges - start can go to knowledge_base or loan_agent
-    graph.add_conditional_edges(
-        START,
-        choose_after_start,
-        {
-            "knowledge_base": "knowledge_base",
-            "loan_agent": "loan_agent",
-        },
-    )
+    # Updated graph edges - ALL traffic goes to knowledge_base first
+    graph.add_edge(START, "knowledge_base")
 
     graph.add_conditional_edges("knowledge_base", choose_after_knowledge_base, {
+        "loan_agent": "loan_agent",
         "client_support": "client_support",
     })
 

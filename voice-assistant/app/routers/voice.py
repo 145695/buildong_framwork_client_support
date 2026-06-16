@@ -876,6 +876,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         )
         
         state = ingest_chat_request(chat_request)
+        state.retrieval_context["text_for_kb"] = text_for_kb
         
         # RESTORE orchestrator context from session to preserve multi-turn state
         from app.layer2.shared.session_manager import get_orchestrator_context
@@ -1104,107 +1105,8 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     except Exception as e:
         raise HTTPException(500, f"Orchestrator processing failed: {str(e)}")
 
-    # Step 4.5: Quick Knowledge-Base check (prefer KB answer when confident)
-    # For loan intents: let KB run but don't skip graph - we need loan agent to set waiting state
-    loan_intents = ["check_loan_eligibility", "apply_for_loan", "loan_status", "apply_for_mortgage", "check_mortgage_payments"]
-    is_loan_intent = result_state.intent in loan_intents if hasattr(result_state, 'intent') else False
-    
-    await send_status("searching_kb", detected_language)
-    print(f"  [KB SEARCH]  → Searching...")
-    try:
-        from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
-        kb_system = IntelligentRAGSystem()
-        import asyncio
-
-        print(f"  [KB SEARCH]  → Loading documents...")
-        if asyncio.iscoroutinefunction(kb_system.load_documents):
-            await kb_system.load_documents()
-        else:
-            kb_system.load_documents()
-        print(f"  [KB SEARCH]  → Documents loaded, asking question...")
-
-        if asyncio.iscoroutinefunction(kb_system.ask_question):
-            kb_result = await kb_system.ask_question(text_for_kb)
-        else:
-            kb_result = kb_system.ask_question(text_for_kb)
-        
-        print(f"  [KB SEARCH]  → ✓ Done")
-        print(f"  [KB SEARCH]  → Answer: {kb_result.get('answer', 'No answer')[:100]}...")
-
-        results["stages"]["knowledge_base"] = {
-            "success": True,
-            "answer": kb_result.get("answer", None),
-            "confidence": kb_result.get("confidence", 0.0),
-            "documents_found": kb_result.get("documents_found", 0),
-        }
-
-        # For loan intents: store KB result but always go through graph routing
-        # For non-loan intents: if KB is confident, skip graph and return KB answer
-        if is_loan_intent:
-            # Store KB result for loan agent to use, but continue to graph routing
-            result_state.kb_result = kb_result.get("answer")
-            results["stages"]["knowledge_base"]["used"] = True
-        elif kb_result.get("answer") and kb_result.get("confidence", 0.0) >= 0.6:
-            result_state.kb_result = kb_result.get("answer")
-            results["stages"]["knowledge_base"]["used"] = True
-
-            await send_status("generating_response", detected_language)
-            from app.layer2.client_support.agent import client_support_node
-            result_state = client_support_node(result_state)
-            english_response = result_state.final_response_en
-            results["agent_response"] = english_response
-
-            # Inject BEFORE security (and independent of KB)
-            loan_involved = _is_loan_involved(result_state)
-            # Only inject followup if user hasn't already declined eligibility test
-            from app.layer2.shared.session_manager import is_eligibility_declined
-            if loan_involved and not is_eligibility_declined(session_id):
-                LOAN_FOLLOWUP_PHRASE_EN = "Would you like to check your eligibility for this loan? Please answer Yes or No."
-                english_response = english_response + "\n\n" + LOAN_FOLLOWUP_PHRASE_EN
-            results["loan_followup_triggered"] = bool(loan_involved and not is_eligibility_declined(session_id))
-
-            # Apply output validation/redaction
-            try:
-                from app.security_layer2.output_validator import validate_output
-                validated_response = validate_output(english_response)
-                results["stages"]["security_layer2"] = {
-                    "success": True,
-                    "modified": validated_response != english_response,
-                }
-                english_response = validated_response
-            except Exception as e:
-                logger.error(f"[Security-L2] ERROR during KB flow: {str(e)}")
-                results["stages"]["security_layer2"] = {"success": False, "error": str(e)}
-
-            # Localize and deliver final KB answer
-            from app.layer3.translation.translator import translate_from_english
-            localized_response = translate_from_english(english_response, detected_language)
-
-            from app.layer3.delivery import deliver_response
-            from app.schemas.conversation import ConversationState, SourceChannel
-            delivery_state = ConversationState(
-                conversation_id="voice-pipeline-kb",
-                source_channel=SourceChannel.VOICE,
-                source_language=detected_language,
-                original_text=result_state.original_text,
-                normalized_text_en=english_response,
-                final_response_en=english_response,
-                final_response_localized=localized_response,
-            )
-            audio_state = deliver_response(delivery_state)
-
-            if audio_state.final_response_audio:
-                import base64
-                results["final_response_audio"] = base64.b64encode(audio_state.final_response_audio).decode("utf-8")
-                results["audio_model_used"] = audio_state.audio_model_used
-                results["audio_sample_rate"] = audio_state.audio_sample_rate
-                results["final_response_localized"] = audio_state.final_response_localized
-                add_to_history(session_id, text_for_ingestion, localized_response or english_response)
-
-            return results
-    except Exception as e:
-        logger.warning(f"[KnowledgeBase] KB quick-check failed: {e}")
-        results["stages"]["knowledge_base"] = {"success": False, "error": str(e)}
+    # Step 4.5: Removed Quick Knowledge-Base check.
+    # The Knowledge Base is now properly executed INSIDE the LangGraph flow.
 
     try:
         # Execute the graph to run proper agent flow
@@ -1300,39 +1202,18 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     print(f"  ✓ Turn {turn_number} complete  │  Session: {session_short}")
     print(f"══════════════════════════════════════════════════")
 
-    # Step 5: Knowledge Base Query
-    try:
-        # Initialize knowledge base system
-        kb_system = IntelligentRAGSystem()
-        
-        # Load documents synchronously before querying
-        import asyncio
-        if asyncio.iscoroutinefunction(kb_system.load_documents):
-            await kb_system.load_documents()
-        else:
-            kb_system.load_documents()
-        
-        # Query knowledge base with original transcription
-        if asyncio.iscoroutinefunction(kb_system.ask_question):
-            kb_result = await kb_system.ask_question(transcription)
-        else:
-            kb_result = kb_system.ask_question(transcription)
-        
+    # Step 5: Extract KB metadata from final_state after graph execution
+    if hasattr(final_state, 'kb_result') and final_state.kb_result:
         results["stages"]["knowledge_base"] = {
             "success": True,
-            "answer": kb_result.get("answer", "No answer available"),
-            "sources": kb_result.get("sources", []),
-            "confidence": kb_result.get("confidence", 0.0),
-            "documents_found": kb_result.get("documents_found", 0),
-            "needs_clarification": kb_result.get("needs_clarification", False)
+            "answer": final_state.kb_result,
+            "used": True,
+            "confidence": getattr(final_state, 'agent_feedback', {}).get('knowledge_base', {}).get('confidence', 0.0)
         }
-        
-    except Exception as e:
-        print(f"Knowledge base error: {e}")
+    else:
         results["stages"]["knowledge_base"] = {
             "success": False,
-            "error": str(e),
-            "fallback_answer": "Knowledge base temporarily unavailable"
+            "error": "KB not used or failed in graph"
         }
 
     # Add summary
