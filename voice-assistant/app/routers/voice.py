@@ -1106,7 +1106,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         raise HTTPException(500, f"Orchestrator processing failed: {str(e)}")
 
     # Step 4.5: Removed Quick Knowledge-Base check.
-        # Start periodic "still working" reminders every 10 seconds
+    # Start periodic "still working" reminders every 10 seconds
     import asyncio as asyncio_mod
     reminder_running = True
     
@@ -1130,7 +1130,7 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     try:
         # Execute the graph to run proper agent flow
         from app.layer2.graph import _run_with_langgraph
-        final_state = _run_with_langgraph(result_state)
+        final_state = await asyncio_mod.get_event_loop().run_in_executor(None, _run_with_langgraph, result_state)
         
         # Update results with final state after graph execution
         if final_state.final_response_en:
