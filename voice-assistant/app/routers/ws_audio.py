@@ -69,24 +69,57 @@ async def websocket_audio_endpoint(websocket: WebSocket, session_id: str):
                         })
                         try:
                             from app.main import ml_models
-                            kokoro = ml_models.get("tts_kokoro_en")
-                            if kokoro:
-                                generator = kokoro(message, voice="af_heart")
-                                chunks = [audio for _, _, audio in generator]
-                                if chunks:
-                                    tts_audio = np.concatenate(chunks)
+
+                            tts_audio = None
+                            sample_rate = 24000
+
+                            if language == "fr":
+                                kokoro = ml_models.get("tts_kokoro_fr")
+                                if kokoro:
+                                    generator = kokoro(message, voice="ff_siwis")
+                                    chunks = [audio for _, _, audio in generator]
+                                    if chunks:
+                                        tts_audio = np.concatenate(chunks)
+                            elif language == "ar":
+                                # Arabic: use gTTS for proper Arabic pronunciation
+                                try:
+                                    from gtts import gTTS
+                                    tts = gTTS(text=message, lang='ar')
                                     wav_buffer = io.BytesIO()
-                                    sf.write(wav_buffer, tts_audio, 24000, format="WAV")
+                                    tts.write_to_fp(wav_buffer)
                                     wav_buffer.seek(0)
-                                    audio_bytes = wav_buffer.read()
-                                    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-                                    await websocket.send_json({
-                                        "type": "status_audio",
-                                        "stage": stage,
-                                        "audio": f"data:audio/wav;base64,{audio_base64}",
-                                        "language": language
-                                    })
-                                    print(f"[CALLBACK] Audio sent: {message[:30]}...")
+                                    tts_audio, sample_rate = sf.read(wav_buffer)
+                                    if len(tts_audio.shape) > 1:
+                                        tts_audio = tts_audio[:, 0]
+                                except:
+                                    kokoro = ml_models.get("tts_kokoro_en")
+                                    if kokoro:
+                                        generator = kokoro(message, voice="af_heart")
+                                        chunks = [audio for _, _, audio in generator]
+                                        if chunks:
+                                            tts_audio = np.concatenate(chunks)
+                            else:
+                                # English: Kokoro EN
+                                kokoro = ml_models.get("tts_kokoro_en")
+                                if kokoro:
+                                    generator = kokoro(message, voice="af_heart")
+                                    chunks = [audio for _, _, audio in generator]
+                                    if chunks:
+                                        tts_audio = np.concatenate(chunks)
+
+                            if tts_audio is not None:
+                                wav_buffer = io.BytesIO()
+                                sf.write(wav_buffer, tts_audio, sample_rate, format="WAV")
+                                wav_buffer.seek(0)
+                                audio_bytes = wav_buffer.read()
+                                audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+                                await websocket.send_json({
+                                    "type": "status_audio",
+                                    "stage": stage,
+                                    "audio": f"data:audio/wav;base64,{audio_base64}",
+                                    "language": language
+                                })
+                                print(f"[CALLBACK] Audio sent: {message[:30]}... [{language}]")
                         except Exception as e:
                             print(f"[CALLBACK] TTS error: {e}")
 

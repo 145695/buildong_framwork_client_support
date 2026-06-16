@@ -1111,18 +1111,24 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
     reminder_running = True
     
     async def remind_user():
+        
         messages = {
             "fr": ["Je cherche toujours, merci de patienter...", "Encore quelques instants...", "Je consulte nos documents..."],
             "en": ["Still searching, please wait...", "Just a moment longer...", "Checking our documents..."],
-            "ar": ["ما زلت أبحث، شكرا لانتظارك...", "لحظات أخرى من فضلك...", "أراجع وثائقنا..."]
+            "ar": ["ما زلت أبحث, شكرا لانتظارك...", "لحظات أخرى من فضلك...", "أراجع وثائقنا..."]
         }
         lang = detected_language if detected_language in messages else "fr"
         msgs = messages[lang]
         i = 0
+        # Fire immediately first
+        if status_callback:
+            print(f"[REMINDER] Firing immediately: {msgs[0]}")
+            await status_callback("processing", msgs[0], lang)
         while reminder_running:
             await asyncio_mod.sleep(10)
             if reminder_running and status_callback:
-                await status_callback("processing", msgs[i % len(msgs)], lang)
+                print(f"[REMINDER] Firing: {msgs[(i+1) % len(msgs)]}")
+                await status_callback("processing", msgs[(i+1) % len(msgs)], lang)
                 i += 1
     
     reminder_task = asyncio_mod.create_task(remind_user())
