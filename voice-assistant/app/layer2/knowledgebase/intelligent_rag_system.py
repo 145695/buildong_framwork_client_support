@@ -22,6 +22,7 @@ import re
 import logging
 import unicodedata
 import pickle
+import asyncio
 import hashlib
 
 # Lightweight KG (GraphRAG)
@@ -1103,8 +1104,27 @@ Instructions:
 
 Réponse:"""
         
-            response = await self.llm.ainvoke(prompt)
-            answer = response.content.strip()
+            # Try Mistral with 30s timeout, fallback to raw KB if slow
+            try:
+                response = await asyncio.wait_for(
+                    self.llm.ainvoke(prompt),
+                    timeout=30
+                )
+                answer = response.content.strip()
+            except asyncio.TimeoutError:
+                print("[KB] Mistral timed out, using raw document content")
+                if evidence_chunks:
+                    answer = evidence_chunks[0].get("content", "")[:600].strip()
+                    if graph_facts:
+                        answer = graph_facts + "\n\n" + answer
+                else:
+                    answer = "Je n'ai pas trouvé d'information spécifique."
+            except Exception as e:
+                print(f"[KB] Mistral error: {e}, using raw content")
+                if evidence_chunks:
+                    answer = evidence_chunks[0].get("content", "")[:600].strip()
+                else:
+                    answer = "Je n'ai pas trouvé d'information spécifique."
 
             # Prefer explicit numeric rates found in graph facts or evidence chunks.
             # Sometimes the LLM can mis-summarize numeric relations (e.g. rendering "3 fois" as "3 * 100 = 300 %").
