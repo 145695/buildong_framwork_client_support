@@ -1106,8 +1106,27 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
         raise HTTPException(500, f"Orchestrator processing failed: {str(e)}")
 
     # Step 4.5: Removed Quick Knowledge-Base check.
+        # Start periodic "still working" reminders every 10 seconds
+    import asyncio as asyncio_mod
+    reminder_running = True
+    
+    async def remind_user():
+        messages = {
+            "fr": ["Je cherche toujours, merci de patienter...", "Encore quelques instants...", "Je consulte nos documents..."],
+            "en": ["Still searching, please wait...", "Just a moment longer...", "Checking our documents..."],
+            "ar": ["ما زلت أبحث، شكرا لانتظارك...", "لحظات أخرى من فضلك...", "أراجع وثائقنا..."]
+        }
+        lang = detected_language if detected_language in messages else "fr"
+        msgs = messages[lang]
+        i = 0
+        while reminder_running:
+            await asyncio_mod.sleep(10)
+            if reminder_running and status_callback:
+                await status_callback("processing", msgs[i % len(msgs)], lang)
+                i += 1
+    
+    reminder_task = asyncio_mod.create_task(remind_user())
     # The Knowledge Base is now properly executed INSIDE the LangGraph flow.
-
     try:
         # Execute the graph to run proper agent flow
         from app.layer2.graph import _run_with_langgraph
@@ -1193,6 +1212,8 @@ async def _voice_full_pipeline_internal(audio: UploadFile, session_id: Optional[
             "error": str(e)
         }
         raise HTTPException(500, f"Orchestrator processing failed: {str(e)}")
+    finally:
+     reminder_running = False
 
     # Add completion footer
     from app.layer2.shared.session_manager import get_session
