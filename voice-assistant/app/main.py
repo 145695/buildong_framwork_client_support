@@ -8,6 +8,7 @@ from kokoro import KPipeline
 from transformers import pipeline
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 
 load_dotenv()
 
@@ -82,6 +83,21 @@ async def lifespan(_: FastAPI):
         ml_models["tts_kokoro_fr"] = None
         ml_models["tts_habibi"] = None
         print("Voice models skipped (set LOAD_VOICE_MODELS=true to enable).")
+
+    # Pre-load Knowledge Base at startup
+    print("Pre-loading Knowledge Base...")
+    try:
+        from app.layer2.knowledgebase.intelligent_rag_system import IntelligentRAGSystem
+        kb = IntelligentRAGSystem()
+        if asyncio.iscoroutinefunction(kb.load_documents):
+            await kb.load_documents()
+        else:
+            kb.load_documents()
+        ml_models["kb_system"] = kb
+        print(f"KB ready: {len(kb.documents)} docs cached")
+    except Exception as exc:
+        print(f"KB pre-load failed: {exc}")
+        ml_models["kb_system"] = None
 
     print(f"Final ml_models keys: {list(ml_models.keys())}")
     yield
